@@ -1,0 +1,49 @@
+#
+# Copyright (c) 2022 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+source "Kconfig.zephyr"
+
+menu "Nordic Sta sample"
+
+config STA_SAMPLE_SSID
+	string "SSID"
+	help
+	  Specify the SSID to connect
+
+config STA_KEY_MGMT_NONE
+	bool "Open Security"
+	help
+	  Enable for Open Security
+
+config STA_KEY_MGMT_WPA2
+	bool "WPA2 Security"
+	help
+	  Enable for WPA2 Security
+
+config STA_KEY_MGMT_WPA2_256
+	bool "WPA2 SHA 256 Security"
+	help
+	  Enable for WPA2-SHA 256 Security
+
+config STA_KEY_MGMT_WPA3
+	bool "WPA3 Security"
+	help
+	  Enable for WPA3 Security
+
+config STA_KEY_MGMT_SELECT
+	int "Security Option"
+	default 0 if STA_KEY_MGMT_NONE
+	default 1 if STA_KEY_MGMT_WPA2
+	default 2 if STA_KEY_MGMT_WPA2_256
+	default 3 if STA_KEY_MGMT_WPA3
+	help
+	  For Security option
+
+config STA_SAMPLE_PASSWORD
+	string "PASSWORD"
+	help
+	  Specify the Password to connect
+endmenu
