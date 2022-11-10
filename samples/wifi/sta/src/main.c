@@ -35,10 +35,14 @@ LOG_MODULE_REGISTER(sta, CONFIG_LOG_DEFAULT_LEVEL);
 static struct net_mgmt_event_callback wifi_shell_mgmt_cb;
 static struct net_mgmt_event_callback net_shell_mgmt_cb;
 
+K_SEM_DEFINE(sem_dhcp, 0, 1);
+
 static struct {
 	const struct shell *sh;
 	union {
 		struct {
+			uint8_t connected	: 1;
+			uint8_t connect_result	: 1;
 			uint8_t disconnecting	: 1;
 			uint8_t _unused		: 6;
 		};
@@ -53,37 +57,49 @@ static int cmd_wifi_status(void)
 
 	if (net_mgmt(NET_REQUEST_WIFI_IFACE_STATUS, iface, &status,
 				sizeof(struct wifi_iface_status))) {
-		printk("Status request failed\n");
+		LOG_INF("Status request failed");
 
 		return -ENOEXEC;
 	}
 
-	printk("Status: successful\n");
-	printk("==================\n");
-	printk("State: %s\n", wifi_state_txt(status.state));
+	LOG_INF("==================");
+	LOG_INF("State: %s", wifi_state_txt(status.state));
 
 	if (status.state >= WIFI_STATE_ASSOCIATED) {
 		uint8_t mac_string_buf[sizeof("xx:xx:xx:xx:xx:xx")];
 
-		printk("Interface Mode: %s\n",
+		LOG_INF("Interface Mode: %s",
 		       wifi_mode_txt(status.iface_mode));
-		printk("Link Mode: %s\n",
+		LOG_INF("Link Mode: %s",
 		       wifi_link_mode_txt(status.link_mode));
-		printk("SSID: %-32s\n", status.ssid);
-		printk("BSSID: %s\n",
+		LOG_INF("SSID: %-32s", status.ssid);
+		LOG_INF("BSSID: %s",
 		       net_sprint_ll_addr_buf(
 				status.bssid, WIFI_MAC_ADDR_LEN,
 				mac_string_buf, sizeof(mac_string_buf)));
-		printk("Band: %s\n", wifi_band_txt(status.band));
-		printk("Channel: %d\n", status.channel);
-		printk("Security: %s\n", wifi_security_txt(status.security));
-		printk("MFP: %s\n", wifi_mfp_txt(status.mfp));
-		printk("RSSI: %d\n", status.rssi);
+		LOG_INF("Band: %s", wifi_band_txt(status.band));
+		LOG_INF("Channel: %d", status.channel);
+		LOG_INF("Security: %s", wifi_security_txt(status.security));
+		LOG_INF("MFP: %s", wifi_mfp_txt(status.mfp));
+		LOG_INF("RSSI: %d", status.rssi);
+
 	}
-
-
 	return 0;
 }
+
+static void status_thread(void *p1, void *p2, void *p3)
+{
+	int i;
+
+	for (i = 0; i < CONFIG_CONNECTION_TIMEOUT_MS; i++) {
+		k_sleep(K_MSEC(CONFIG_STATUS_POLLING_MS));
+		cmd_wifi_status();
+		if (context.connect_result) {
+			break;
+		}
+	}
+}
+
 
 static void handle_wifi_connect_result(struct net_mgmt_event_callback *cb)
 {
@@ -94,9 +110,10 @@ static void handle_wifi_connect_result(struct net_mgmt_event_callback *cb)
 		LOG_ERR("Connection request failed (%d)", status->status);
 	} else {
 		LOG_INF("Connected");
+		context.connected = true;
 	}
 
-	cmd_wifi_status();
+	context.connect_result = true;
 }
 
 static void handle_wifi_disconnect_result(struct net_mgmt_event_callback *cb)
@@ -141,6 +158,7 @@ static void print_dhcp_ip(struct net_mgmt_event_callback *cb)
 	net_addr_ntop(AF_INET, addr, dhcp_info, sizeof(dhcp_info));
 
 	LOG_INF("IP address: %s", dhcp_info);
+	k_sem_give(&sem_dhcp);
 }
 
 static void net_mgmt_event_handler(struct net_mgmt_event_callback *cb,
@@ -190,6 +208,8 @@ static int wifi_connect(void)
 	struct net_if *iface = net_if_get_default();
 	static struct wifi_connect_req_params cnx_params;
 
+	context.connected = false;
+	context.connect_result = false;
 	__wifi_args_to_params(&cnx_params);
 
 	if (net_mgmt(NET_REQUEST_WIFI_CONNECT, iface,
@@ -229,6 +249,16 @@ static int wifi_disconnect(void)
 	return 0;
 }
 
+K_THREAD_DEFINE(client_status,
+		CONFIG_CLIENT_STATUS_THREAD_STACK_SIZE,
+		status_thread,
+		NULL,
+		NULL,
+		NULL,
+		0,
+		0,
+		K_TICKS_FOREVER);
+
 void main(void)
 {
 	context.all = 0U;
@@ -255,6 +285,18 @@ void main(void)
 	k_sleep(K_SECONDS(1));
 
 	wifi_connect();
-	k_sleep(K_SECONDS(30));
+
+	k_thread_start(client_status);
+	k_thread_join(client_status, K_SECONDS(30));
+
+	if (context.connected) {
+		if (k_sem_take(&sem_dhcp, K_SECONDS(70)) == -EAGAIN) {
+			LOG_ERR("DHCP Connection Timed Out");
+		}
+		k_sleep(K_SECONDS(30));
+	} else if (!context.connect_result) {
+		LOG_ERR("Connection Timed Out");
+	}
 	wifi_disconnect();
+
 }

@@ -8,6 +8,18 @@ source "Kconfig.zephyr"
 
 menu "Nordic Sta sample"
 
+config CLIENT_STATUS_THREAD_STACK_SIZE
+	int "Stack size for client connection status thread"
+	default 4096
+
+config CONNECTION_TIMEOUT_MS
+	int "Timeout for client to connect"
+	default 100
+
+config STATUS_POLLING_MS
+	int "Timeout for printing the client status"
+	default 300
+
 config STA_SAMPLE_SSID
 	string "SSID"
 	help
