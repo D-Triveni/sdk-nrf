@@ -25,7 +25,6 @@ LOG_MODULE_REGISTER(sta, CONFIG_LOG_DEFAULT_LEVEL);
 #include <zephyr/net/socket.h>
 #include <zephyr/shell/shell_uart.h>
 #include <zephyr/bluetooth/conn.h>
-#include "zperf.h"
 #define CONFIG_NET_ZPERF_MAX_PACKET_SIZE 1024
 #include "zperf_internal.h"
 #include "zperf_session.h"
@@ -114,7 +113,8 @@ static struct {
 
 
 K_SEM_DEFINE(wait_for_next, 0, 1);
-struct wifi_benchmark_config {
+K_SEM_DEFINE(udp_callback, 0, 1);
+/*struct wifi_benchmark_config {
 	bool is_server;
 	bool is_udp;
 	int port;
@@ -143,7 +143,7 @@ K_THREAD_DEFINE(run_wifi_traffic,
 		NULL,
 		CONFIG_WIFI_THREAD_PRIORITY,
 		0,
-		K_TICKS_FOREVER); /* K_FOREVER gives compilation warning k_timeout->int */
+		K_TICKS_FOREVER); * K_FOREVER gives compilation warning k_timeout->int */
 
 static void run_bt_benchmark(void);
 
@@ -359,7 +359,7 @@ static int parse_ipv4_addr(char *host, struct sockaddr_in *addr)
 
 	return 0;
 }
-
+/*
 static void run_wifi_benchmark_client(bool is_udp, int port, unsigned int duration_in_ms,
 		unsigned int packet_size, unsigned int rate_in_kbps)
 {
@@ -412,7 +412,7 @@ static void run_wifi_benchmark_client(bool is_udp, int port, unsigned int durati
 	} else {
 		client_rate_in_kbps = 0U;
 	}
-	/* print results */
+	* print results *
 	LOG_INF("Upload results:\n");
 	LOG_INF("%u bytes in %u ms\n",
 		results.nb_packets_sent * results.packet_size,
@@ -442,7 +442,7 @@ static void run_wifi_benchmark(void)
 	}
 	// TODO: Add server, TCP client and server if needed.
 }
-
+*/
 int wait_for_next_event(const char *event_name, int timeout)
 {
 	int wait_result;
@@ -567,6 +567,49 @@ void conn_find_cb1(struct bt_conn *conn, void *data)
 	(*temp_conn) = conn;
 }
 
+static void udp_upload_results_cb(enum zperf_status status,
+			  struct zperf_results *result,
+			  void *user_data)
+{
+	unsigned int client_rate_in_kbps;
+
+	switch (status) {
+	case ZPERF_SESSION_STARTED:
+		LOG_INF("New UDP session started");
+		break;
+	case ZPERF_SESSION_FINISHED:
+		LOG_INF("Wi-Fi benchmark: Upload completed!");
+		if (result->client_time_in_us != 0U) {
+			client_rate_in_kbps = (uint32_t)
+				(((uint64_t)result->nb_packets_sent *
+				  (uint64_t)result->packet_size * (uint64_t)8 *
+				  (uint64_t)USEC_PER_SEC) /
+				 ((uint64_t)result->client_time_in_us * 1024U));
+		} else {
+			client_rate_in_kbps = 0U;
+		}
+		/* print results */
+		LOG_INF("Upload results:");
+		LOG_INF("%u bytes in %u ms",
+				(result->nb_packets_sent * result->packet_size),
+				(result->client_time_in_us / USEC_PER_MSEC));
+		LOG_INF("%u packets sent", result->nb_packets_sent);
+		LOG_INF("%u packets lost", result->nb_packets_lost);
+		LOG_INF("%u packets received", result->nb_packets_rcvd);
+
+		/*printk("Rate:\t\t\t");
+		  print_number(sh, rate_in_kbps, KBPS, KBPS_UNIT);
+		  printk("\t(");
+		  print_number(sh, client_rate_in_kbps, KBPS, KBPS_UNIT);
+		  printk(")\n");*/
+		k_sem_give(&udp_callback);
+		break;
+	case ZPERF_SESSION_ERROR:
+		LOG_ERR("UDP session error");
+		break;
+	}
+}
+
 int main(void)
 {
 	/* Choose option: coexistence enable/disable */
@@ -676,8 +719,20 @@ int main(void)
 	}
 
 	if (CONFIG_RUN_WLAN) {
+		struct zperf_upload_params params;
+		void *data;
 		/* Start Wi-Fi traffic */
-		k_thread_start(run_wifi_traffic);
+		LOG_INF("Starting Wi-Fi benchmark: Zperf client");
+		params.duration_ms = CONFIG_WIFI_TEST_DURATION;
+		params.rate_kbps = CONFIG_WIFI_ZPERF_RATE;
+		params.packet_size = CONFIG_WIFI_ZPERF_PKT_SIZE;
+		parse_ipv4_addr(CONFIG_NET_CONFIG_PEER_IPV4_ADDR,
+                        &in4_addr_my);
+		net_sprint_ipv4_addr(&in4_addr_my.sin_addr);
+
+		memcpy(&params.peer_addr, &in4_addr_my, sizeof(in4_addr_my));
+
+		zperf_udp_upload_async(&params,udp_upload_results_cb,data);
 	}
 
 	if (CONFIG_RUN_BLE) {
@@ -698,7 +753,12 @@ int main(void)
 
 	if (CONFIG_RUN_WLAN) {
 		/* Run Wi-Fi traffic */
-		k_thread_join(run_wifi_traffic, K_FOREVER);
+		LOG_INF("Waiting on semaphore");
+		if(k_sem_take(&udp_callback, K_FOREVER) != 0) {
+			LOG_ERR("Results are not ready");
+		} else {
+			LOG_INF("UDP SESSION FINISHED");
+		}
 	}
 
 	if (CONFIG_RUN_BLE) {
