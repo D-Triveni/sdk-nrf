@@ -2657,26 +2657,111 @@ int wfaStopPing(dutCmdResponse_t *stpResp, int streamid)
     return WFA_SUCCESS;
 }
 
+#define WIFI_SHELL_MGMT_EVENTS (NET_EVENT_WIFI_SCAN_RESULT |            \
+                                NET_EVENT_WIFI_SCAN_DONE)
+
+static struct net_mgmt_event_callback wifi_shell_mgmt_cb;
+char *scan_buffer = NULL;
+int length = 0;
+K_SEM_DEFINE(sem_scan, 0, 1);
+
+static void handle_wifi_scan_result(struct net_mgmt_event_callback *cb)
+{
+        const struct wifi_scan_result *entry =
+                (const struct wifi_scan_result *)cb->info;
+        uint8_t mac_string_buf[sizeof("xx:xx:xx:xx:xx:xx")];
+
+	printf("TRIVENI - Scan request came\n");
+        int ret = 0;
+	static int i = 1;
+
+	if (entry && length < 1024) {
+		printf("TRIVENI - Scan request process\n");
+		ret = sprintf(scan_buffer + length, "SSID%d,%s,BSSID%d,%s,", i, entry->ssid,
+				i, ((entry->mac_length) ?
+				net_sprint_ll_addr_buf(entry->mac, WIFI_MAC_ADDR_LEN, mac_string_buf,
+							sizeof(mac_string_buf)) : ""));
+		length += ret;
+		i++;
+	}
+}
+
+static void handle_wifi_scan_done(struct net_mgmt_event_callback *cb)
+{
+	const struct wifi_status *status =
+		(const struct wifi_status *)cb->info;
+
+	if (status->status) {
+		printf("Scan request failed (%d)\n", status->status);
+	} else {
+		printf("TRIVENI - Scan request done\n");
+		k_sem_give(&sem_scan);
+	}
+}
+
+static void wifi_mgmt_event_handler(struct net_mgmt_event_callback *cb,
+                                     uint32_t mgmt_event, struct net_if *iface)
+{
+        switch (mgmt_event) {
+        case NET_EVENT_WIFI_SCAN_RESULT:
+			handle_wifi_scan_result(cb);
+                break;
+        case NET_EVENT_WIFI_SCAN_DONE:
+			handle_wifi_scan_done(cb);
+                break;
+        default:
+                break;
+        }
+}
+
+static void wifi_scan(void)
+{
+    struct net_if *iface = net_if_get_default();
+    if (net_mgmt(NET_REQUEST_WIFI_SCAN, iface, NULL, 0)) {
+	    printf("Scan request failed\n");
+	    return -ENOEXEC;
+    }
+    printf("TRIVENI: Scan requested\n");
+
+    return 0;
+}
+
 int wfaStaScan(int len, BYTE *caCmdBuf, int *respLen, BYTE *respBuf)
 {
-    dutCmdResponse_t infoResp;
+    dutCmdResponse_t *infoResp = &gGenericResp;
     caStaScan_t *staScan = (caStaScan_t *)caCmdBuf;  //comment if not used
     printf("\n Entry wfaStaScan ...\n ");
 
     // SCAN command
-    struct net_if *iface = net_if_get_default();
-    if (net_mgmt(NET_REQUEST_WIFI_SCAN, iface, NULL, 0)) {
-	    printf("Scan request failed");
-	    return -ENOEXEC;
+    scan_buffer = malloc(1024);
+    if(!scan_buffer)
+	    printf("Malloc failed\n");
+    memset(scan_buffer, 0, 1024);
+    net_mgmt_init_event_callback(&wifi_shell_mgmt_cb,
+                                 wifi_mgmt_event_handler,
+                                 WIFI_SHELL_MGMT_EVENTS);
+    net_mgmt_add_event_callback(&wifi_shell_mgmt_cb);
+
+    wifi_scan();
+    sleep(3);
+
+    if (k_sem_take(&sem_scan, K_SECONDS(10)) == -EAGAIN) {
+		    infoResp->status = STATUS_ERROR;
+		    goto error;
+    } else {
+	    if(strlen(scan_buffer)) {
+		    memcpy(infoResp->cmdru.execAction.scan_res_buf, scan_buffer, 256);
+		    infoResp->status = STATUS_COMPLETE;
+		    goto error;
+	   }
     }
-    printf("Scan requested");
-    sleep(2);
 
-    infoResp.status = STATUS_COMPLETE;
-    wfaEncodeTLV(WFA_STA_SCAN_RESP_TLV, sizeof(infoResp), (BYTE *)&infoResp, respBuf);
-    *respLen = WFA_TLV_HDR_LEN + sizeof(infoResp);
-
-   return WFA_SUCCESS;
+error:
+    wfaEncodeTLV(WFA_STA_SCAN_RESP_TLV, sizeof(*infoResp), (BYTE *)infoResp, respBuf);
+    *respLen = WFA_TLV_HDR_LEN + sizeof(*infoResp);
+    free(scan_buffer);
+    free(scan_buffer);
+    return WFA_SUCCESS;
 }
 
 #define RSSI_FAILED 0
