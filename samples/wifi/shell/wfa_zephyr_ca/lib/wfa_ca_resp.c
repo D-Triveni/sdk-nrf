@@ -126,6 +126,7 @@ dutCommandRespFuncPtr wfaCmdRespProcFuncTbl[WFA_STA_RESPONSE_END+1] =
 	wfaStaGenericResp,                   /* (49)*/
 	wfaStaGenericResp,                   /* (49)*/
 	wfaStaGenericResp,                   /* (49)*/
+	wfaStaGetParameterResp,              /* WFA_STA_GET_PARAMETER_RESP_TLV - WFA_STA_COMMANDS_END           (79) */
 	wfaStaGenericResp,                   /* (49)*/
 	wfaStaGenericResp,                   /* (49)*/
 	wfaStaGenericResp,                   /* (49)*/
@@ -592,6 +593,33 @@ int wfaStaGetBSSIDResp(BYTE *cmdBuf)
 			sprintf(gRespStr, "status,COMPLETE,mac,00:00:00:00:00:00\r\n");
 			printf("unknown status\n");
 	}
+	wfaCtrlSend(gCaSockfd, (BYTE *)gRespStr, strlen(gRespStr));
+
+	return done;
+}
+
+int wfaStaGetParameterResp(BYTE *cmdBuf)
+{
+	int done = 0;
+	dutCmdResponse_t *infoResp = (dutCmdResponse_t *)(cmdBuf + 4);
+
+	DPRINT_INFO(WFA_OUT, "Entering wfaStaGetParameterResp ...\n");
+	switch(infoResp->status)
+	{
+		case STATUS_RUNNING:
+			DPRINT_INFO(WFA_OUT, "wfaStaGetParameter running ...\n");
+			done = 1;
+			break;
+
+		case STATUS_COMPLETE:
+			sprintf(gRespStr, "status,COMPLETE,rssi,%s\r\n", infoResp->cmdru.getParamValue.rssi);
+			DPRINT_INFO(WFA_OUT, "rssi: %s\n", infoResp->cmdru.getParamValue.rssi);
+			break;
+
+		default:
+			sprintf(gRespStr, "status,INVALID\r\n");
+	}
+
 	wfaCtrlSend(gCaSockfd, (BYTE *)gRespStr, strlen(gRespStr));
 
 	return done;
