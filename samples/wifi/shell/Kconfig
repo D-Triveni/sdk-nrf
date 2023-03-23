@@ -1,0 +1,14 @@
+#
+# Copyright (c) 2022 Nordic Semiconductor
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+source "Kconfig.zephyr"
+
+menu "Nordic SHELL sample"
+
+config NRF7002_QUICK_TRACK
+	bool "Flag to compile zephyr code"
+	default n
+endmenu
