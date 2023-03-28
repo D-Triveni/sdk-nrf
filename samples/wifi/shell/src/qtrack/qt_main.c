@@ -37,8 +37,8 @@
 #include "linux_derived.h"
 
 static pthread_t main_thread;
-#define STACK_SIZE 4096
-K_THREAD_STACK_DEFINE(main_thread_stack, STACK_SIZE); 
+//#define STACK_SIZE 4096
+//K_THREAD_STACK_DEFINE(main_thread_stack, STACK_SIZE); 
 
 /* Internal functions */
 static void control_receive_message(int sock, void *eloop_ctx, void *sock_ctx);
@@ -317,6 +317,7 @@ int qt_main(int argc, char* argv[]) {
     set_wpas_global_ctrl_path(WPAS_GLOBAL_CTRL_PATH_DEFAULT); // Set default wap_supplicant global control interface path
     set_wpas_conf_file(WPAS_CONF_FILE_DEFAULT);               // Set default wap_supplicant configuration file path*/
 
+
     /* Parse the application arguments */
     if (parse_parameters(argc, argv)) {
         return 0;
@@ -366,7 +367,7 @@ int qt_main(int argc, char* argv[]) {
     pthread_attr_setschedpolicy(&ptAttr, SCHED_RR);
     pthread_attr_getschedpolicy(&ptAttr, &ptPolicy);
 
-    ret = pthread_attr_setstack(&ptAttr, &main_thread_stack, 4096);
+    ret = pthread_attr_setstack(&ptAttr, &main_thread_stack, 8192);
     if (ret != 0) {
 	   printf("%s:%d ret: %d\n", __func__, __LINE__, ret);
 	   return ret;
