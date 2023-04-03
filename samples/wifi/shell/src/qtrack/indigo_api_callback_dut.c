@@ -24,9 +24,10 @@
 #include "indigo_api.h"
 #include "vendor_specific.h"
 #include "utils.h"
-#include "wpa_ctrl.h"
+//#include "wpa_ctrl.h"
 #include "indigo_api_callback.h"
 #include "hs2_profile.h"
+#include <zephyr/net/wifi_mgmt.h>
 
 static char pac_file_path[S_BUFFER_LEN] = {0};
 struct interface_info* band_transmitter[16];
@@ -199,7 +200,10 @@ done:
     int ret, status = TLV_VALUE_STATUS_NOT_OK;
     char *message = TLV_VALUE_RESET_NOT_OK;
 
+    indigo_logger(LOG_LEVEL_INFO,"%s-%d", __func__, __LINE__);
     ret = shell_execute_cmd(NULL, "wpa_cli disconnect");
+    //Need to start app again and send response to QTrack
+    printf("\n %d \n", ret);
 
     status = TLV_VALUE_STATUS_OK;
     message = TLV_VALUE_RESET_OK;
@@ -1195,6 +1199,7 @@ static int assign_static_ip_handler(struct packet_wrapper *req, struct packet_wr
     fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
     fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
     fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
+    return 0;
 
 #endif
 }
@@ -1385,10 +1390,13 @@ done:
 #else
     int status = TLV_VALUE_STATUS_NOT_OK;
     char *message = TLV_VALUE_NOT_OK;
-    char mac_addr[S_BUFFER_LEN];
+    char mac_addr[32];
 
+    memset(mac_addr, 0, 32);
+    indigo_logger(LOG_LEVEL_INFO, "%s-%d and %s ", __func__, __LINE__, get_wireless_interface());
     if (!get_mac_address(mac_addr, sizeof(mac_addr), get_wireless_interface()))
     {
+    	indigo_logger(LOG_LEVEL_INFO, "%s-%d", __func__, __LINE__);
     	status = TLV_VALUE_STATUS_OK;
     	message = TLV_VALUE_OK;
     }
@@ -1396,6 +1404,7 @@ done:
     fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
     fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
     if (status == TLV_VALUE_STATUS_OK) {
+    	indigo_logger(LOG_LEVEL_INFO, "%s-%d mac_addr:%s", __func__, __LINE__, mac_addr);
         fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(mac_addr), mac_addr);
         fill_wrapper_tlv_bytes(resp, TLV_DUT_MAC_ADDR, strlen(mac_addr), mac_addr);
     } else {
@@ -1408,41 +1417,70 @@ done:
 }
 
 static int start_loopback_server(struct packet_wrapper *req, struct packet_wrapper *resp) {
-    struct tlv_hdr *tlv;
-    char local_ip[256];
-    int status = TLV_VALUE_STATUS_NOT_OK;
-    char *message = TLV_VALUE_LOOPBACK_SVR_START_NOT_OK;
-    char tool_udp_port[16];
-    char if_name[32];
+#ifndef CONFIG_NRF7002_QUICK_TRACK
+	struct tlv_hdr *tlv;
+	char local_ip[256];
+	int status = TLV_VALUE_STATUS_NOT_OK;
+	char *message = TLV_VALUE_LOOPBACK_SVR_START_NOT_OK;
+	char tool_udp_port[16];
+	char if_name[32];
 
-    /* Find network interface. If P2P Group or bridge exists, then use it. Otherwise, it uses the initiation value. */
-    memset(local_ip, 0, sizeof(local_ip));
-    if (get_p2p_group_if(if_name, sizeof(if_name)) == 0 && find_interface_ip(local_ip, sizeof(local_ip), if_name)) {
-        indigo_logger(LOG_LEVEL_DEBUG, "use %s", if_name);
-    } else if (find_interface_ip(local_ip, sizeof(local_ip), get_wlans_bridge())) {
-        indigo_logger(LOG_LEVEL_DEBUG, "use %s", get_wlans_bridge());
-    } else if (find_interface_ip(local_ip, sizeof(local_ip), get_wireless_interface())) {
-        indigo_logger(LOG_LEVEL_DEBUG, "use %s", get_wireless_interface());
-// #ifdef __TEST__        
-    } else if (find_interface_ip(local_ip, sizeof(local_ip), "eth0")) {
-        indigo_logger(LOG_LEVEL_DEBUG, "use %s", "eth0");
-// #endif /* __TEST__ */
-    } else {
-        indigo_logger(LOG_LEVEL_ERROR, "No available interface");
-        goto done;
-    }
-    /* Start loopback */
-    if (!loopback_server_start(local_ip, tool_udp_port, LOOPBACK_TIMEOUT)) {
-        status = TLV_VALUE_STATUS_OK;
-        message = TLV_VALUE_LOOPBACK_SVR_START_OK;
-    }
+	/* Find network interface. If P2P Group or bridge exists, then use it. Otherwise, it uses the initiation value. */
+	memset(local_ip, 0, sizeof(local_ip));
+	if (get_p2p_group_if(if_name, sizeof(if_name)) == 0 && find_interface_ip(local_ip, sizeof(local_ip), if_name)) {
+		indigo_logger(LOG_LEVEL_DEBUG, "use %s", if_name);
+	} else if (find_interface_ip(local_ip, sizeof(local_ip), get_wlans_bridge())) {
+		indigo_logger(LOG_LEVEL_DEBUG, "use %s", get_wlans_bridge());
+	} else if (find_interface_ip(local_ip, sizeof(local_ip), get_wireless_interface())) {
+		indigo_logger(LOG_LEVEL_DEBUG, "use %s", get_wireless_interface());
+		// #ifdef __TEST__        
+	} else if (find_interface_ip(local_ip, sizeof(local_ip), "eth0")) {
+		indigo_logger(LOG_LEVEL_DEBUG, "use %s", "eth0");
+		// #endif /* __TEST__ */
+	} else {
+		indigo_logger(LOG_LEVEL_ERROR, "No available interface");
+		goto done;
+	}
+	/* Start loopback */
+	if (!loopback_server_start(local_ip, tool_udp_port, LOOPBACK_TIMEOUT)) {
+		status = TLV_VALUE_STATUS_OK;
+		message = TLV_VALUE_LOOPBACK_SVR_START_OK;
+	}
 done:
-    fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
-    fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
-    fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
-    fill_wrapper_tlv_bytes(resp, TLV_LOOP_BACK_SERVER_PORT, strlen(tool_udp_port), tool_udp_port);
+	fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
+	fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
+	fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
+	fill_wrapper_tlv_bytes(resp, TLV_LOOP_BACK_SERVER_PORT, strlen(tool_udp_port), tool_udp_port);
 
-    return 0;
+	return 0;
+#else
+//	char local_ip[256];
+	int status = TLV_VALUE_STATUS_NOT_OK;
+	char *message = TLV_VALUE_LOOPBACK_SVR_START_NOT_OK;
+	char tool_udp_port[16];
+	char if_name[32];
+
+/*	memset(local_ip, 0, sizeof(local_ip));
+	if (find_interface_ip(local_ip, sizeof(local_ip), get_wireless_interface())) {
+		indigo_logger(LOG_LEVEL_DEBUG, "use %s", get_wireless_interface());
+	} else {
+		indigo_logger(LOG_LEVEL_ERROR, "No available interface");
+		goto done;
+	}*/
+
+	/* Start loopback */
+	if (!loopback_server_start(CONFIG_NET_CONFIG_MY_IPV4_ADDR, tool_udp_port, LOOPBACK_TIMEOUT)) {
+		status = TLV_VALUE_STATUS_OK;
+		message = TLV_VALUE_LOOPBACK_SVR_START_OK;
+	}
+done:
+	fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
+	fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
+	fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
+	fill_wrapper_tlv_bytes(resp, TLV_LOOP_BACK_SERVER_PORT, strlen(tool_udp_port), tool_udp_port);
+
+	return 0;
+#endif
 }
 
 // RESP: {<ResponseTLV.STATUS: 40961>: '0', <ResponseTLV.MESSAGE: 40960>: 'Loopback server in idle state'} 
@@ -1832,23 +1870,28 @@ done:
     }
     return 0;
 #else
-    char buffer[64];
+    char *ip_buffer = NULL;
     int status = TLV_VALUE_STATUS_NOT_OK;
     char *message = NULL;
 
-    if (find_interface_ip(buffer, sizeof(buffer), get_wireless_interface())) {
+    /*if (find_interface_ip(buffer, sizeof(buffer), get_wireless_interface())) {
         status = TLV_VALUE_STATUS_OK;
         message = TLV_VALUE_OK;
     } else {
         status = TLV_VALUE_STATUS_NOT_OK;
         message = TLV_VALUE_NOT_OK;
     }
+    sprintf(buffer, sizeof(buffer), CONFIG_NET_CONFIG_MY_IPV4_ADDR);*/
+    ip_buffer = CONFIG_NET_CONFIG_MY_IPV4_ADDR;
+    indigo_logger(LOG_LEVEL_INFO, "IP:%s", ip_buffer);
+    status = TLV_VALUE_STATUS_OK;
+    message = TLV_VALUE_OK;
 
     fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
     fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
     fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
     if (status == TLV_VALUE_STATUS_OK) {
-        fill_wrapper_tlv_bytes(resp, TLV_DUT_WLAN_IP_ADDR, strlen(buffer), buffer);
+        fill_wrapper_tlv_bytes(resp, TLV_DUT_WLAN_IP_ADDR, strlen(ip_buffer), ip_buffer);
     }
     return 0;
 
@@ -1919,13 +1962,11 @@ static int stop_sta_handler(struct packet_wrapper *req, struct packet_wrapper *r
 
     return 0;
 #else
-    char buffer[S_BUFFER_LEN];
     int ret;
     char *message = NULL;
 
-    sprintf(buffer, "wpa_cli -i%s disconnect", get_wireless_interface());
-    printf("\n %s \n", buffer);
-    ret = shell_execute_cmd(NULL, buffer);
+    ret = shell_execute_cmd(NULL, "wpa_cli disconnect");
+    printf("\n %d \n", ret);
     message = TLV_VALUE_WPA_S_STOP_OK;
 
     fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
@@ -2063,11 +2104,14 @@ done:
     return strlen(buffer);
 }
 
+static struct wifi_connect_req_params params;
+char ap_ssid[64];
+    
 static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapper *resp) {
 #ifndef CONFIG_NRF7002_QUICK_TRACK
     int len;
     char buffer[L_BUFFER_LEN];
-    struct tlv_hdr *tlv;
+    struct tlv_hdr *tlv = NULL;
     char *message = "DUT configured as STA : Configuration file created";
 
     memset(buffer, 0, sizeof(buffer));
@@ -2083,7 +2127,42 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
 
     return 0;
 #else
+    struct tlv_hdr *tlv;
     char *message = "DUT configured as STA : Configuration file created";
+
+    memset(&params, 0, sizeof(struct wifi_connect_req_params));
+    indigo_logger(LOG_LEVEL_INFO, "%s-%d", __func__, __LINE__);
+    tlv = find_wrapper_tlv_by_id(req, TLV_STA_SSID);
+    if(tlv) {
+            params.ssid = tlv->value;
+	    params.ssid_length = tlv->len;
+	    strncpy(ap_ssid, params.ssid, params.ssid_length);
+   	    indigo_logger(LOG_LEVEL_INFO, "ssid: %s", params.ssid);
+   	    indigo_logger(LOG_LEVEL_INFO, "ssid_ap: %s", ap_ssid);
+    }
+    tlv = find_wrapper_tlv_by_id(req, TLV_KEY_MGMT);
+    if(tlv) {
+	    if (!strcmp(tlv->value, "OPEN") ||!strcmp(tlv->value, "NONE"))
+		params.security = 0;
+	    if (!strcmp(tlv->value, "WPA-PSK"))
+		params.security = 1;
+	    if (!strcmp(tlv->value, "WPA2-PSK-SHA256"))
+		params.security = 2;
+	    if (!strcmp(tlv->value, "SAE"))
+		params.security = 3;
+    }
+    indigo_logger(LOG_LEVEL_INFO, "%d", params.security);
+    tlv = find_wrapper_tlv_by_id(req, TLV_PSK);
+    if(tlv) {
+	    if ((params.security == 2) ||(params.security == 1)) {
+            	params.psk = tlv->value;
+	    	params.psk_length = tlv->len;
+	     } else if (params.security == 3) {
+            	params.sae_password = tlv->value;
+	    	params.sae_password_length = tlv->len;
+	     }
+    }
+    indigo_logger(LOG_LEVEL_INFO, "%s", params.sae_password);
 
     fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
     fill_wrapper_tlv_byte(resp, TLV_STATUS, TLV_VALUE_STATUS_OK);
@@ -2093,6 +2172,7 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
 }
 
 static int associate_sta_handler(struct packet_wrapper *req, struct packet_wrapper *resp) {
+#ifndef CONFIG_NRF7002_QUICK_TRACK
     char *message = TLV_VALUE_WPA_S_START_UP_NOT_OK;
     char buffer[256];
     int len, status = TLV_VALUE_STATUS_NOT_OK;
@@ -2126,6 +2206,38 @@ done:
     fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
     fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
     return 0;
+#else
+    indigo_logger(LOG_LEVEL_INFO, "ssid_ap: %s", ap_ssid);
+    indigo_logger(LOG_LEVEL_INFO,"%s", params.ssid);
+    int ret, k, status;
+    struct tlv_hdr *tlv;
+    char *message = TLV_VALUE_WPA_S_ASSOC_NOT_OK;
+    char cmd_str[128];
+    char *passwrd = "12345678";
+
+    memset(cmd_str, 0, 128);
+    indigo_logger(LOG_LEVEL_INFO,"%s-%d", __func__, __LINE__);
+    indigo_logger(LOG_LEVEL_INFO,"%s", params.ssid);
+    if(params.security == 1 || params.security == 2) {
+    	sprintf(cmd_str, "wifi connect %s %s %d", ap_ssid, passwrd, params.security);
+    } else if (params.security == 3) {
+    		sprintf(cmd_str, "wifi connect %s %s %d", ap_ssid, passwrd, params.security);
+    } else {
+    		sprintf(cmd_str, "wifi connect %s", ap_ssid);
+    }
+    ret = shell_execute_cmd(NULL, cmd_str);
+    printf("\n %d \n", ret);
+    printf("\n %s \n", cmd_str);
+    sleep(2);
+
+    status = TLV_VALUE_STATUS_OK;
+    message = TLV_VALUE_WPA_S_ASSOC_OK;
+
+    fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
+    fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
+    fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
+    return 0;
+#endif
 }
 
 static int send_sta_disconnect_handler(struct packet_wrapper *req, struct packet_wrapper *resp) {

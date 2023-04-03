@@ -35,5 +35,4 @@ target_sources(app PRIVATE
 	src/qtrack/indigo_packet.c
 	src/qtrack/qt_main.c
 	src/qtrack/utils.c
-	src/qtrack/wpa_ctrl.c
 )

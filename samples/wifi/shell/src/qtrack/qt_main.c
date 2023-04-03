@@ -39,6 +39,7 @@
 static pthread_t main_thread;
 #define STACK_SIZE 4096
 K_THREAD_STACK_DEFINE(main_thread_stack, STACK_SIZE); 
+unsigned char *CMD_RCV_BUF = NULL;
 
 /* Internal functions */
 static void control_receive_message(int sock, void *eloop_ctx, void *sock_ctx);
@@ -52,7 +53,7 @@ extern int debug_packet;   /* used by the packet hexstring print */
 /* Initiate the service port. */
 static int control_socket_init(int port) {
     int s = -1;
-    char cmd[S_BUFFER_LEN];
+    //char cmd[S_BUFFER_LEN];
     struct sockaddr_in addr;
 
     /* Open UDP socket */
@@ -70,8 +71,8 @@ static int control_socket_init(int port) {
     if (bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
         indigo_logger(LOG_LEVEL_ERROR, "Failed to bind server socket: %s", strerror(errno));
         if (errno == EADDRINUSE) {
-            sprintf(cmd, "netstat -lunatp | grep %d", port);
-            system(cmd);
+            //sprintf(cmd, "netstat -lunatp | grep %d", port);
+            //system(cmd);
         }
         close(s);
         return -1;
@@ -104,6 +105,7 @@ void *main_thread_handler()
     if (service_socket >= 0) {
         indigo_logger(LOG_LEVEL_INFO, "Close service port: %d", get_service_port());
         close(service_socket);
+	free(CMD_RCV_BUF);
     }
 }
 
@@ -113,15 +115,24 @@ static void control_receive_message(int sock, void *eloop_ctx, void *sock_ctx) {
     int ret;                          // return code
     int fromlen, len;                 // structure size and received length
     struct sockaddr_storage from;     // source address of the message
-    unsigned char buffer[BUFFER_LEN]; // buffer to receive the message
+    //unsigned char buffer[BUFFER_LEN]={0}; // buffer to receive the message
+   // unsigned char *buffer = NULL;
     struct packet_wrapper req, resp;  // packet wrapper for the received message and response
     struct indigo_api *api = NULL;    // used for API search, validation and handler call
 
+    /*buffer = malloc(BUFFER_LEN);
+    if(!buffer) {
+       	indigo_logger(LOG_LEVEL_ERROR, "Malloc Failure");
+	return;
+    }*/
+     
+   memset(CMD_RCV_BUF, '\0', BUFFER_LEN); 
     /* Receive request */
     fromlen = sizeof(from);
-    len = recvfrom(sock, buffer, BUFFER_LEN, 0, (struct sockaddr *) &from, (socklen_t*)&fromlen);
+    len = recvfrom(sock, CMD_RCV_BUF, BUFFER_LEN, 0, (struct sockaddr *) &from, (socklen_t*)&fromlen);
     if (len < 0) {
         indigo_logger(LOG_LEVEL_ERROR, "Server: Failed to receive the packet");
+	//free(buffer);
         return ;
     } else {
         indigo_logger(LOG_LEVEL_DEBUG, "Server: Receive the packet");
@@ -131,15 +142,15 @@ static void control_receive_message(int sock, void *eloop_ctx, void *sock_ctx) {
     /* Parse request to HDR and TLV. Response NACK if parser fails. Otherwises, ACK. */
     memset(&req, 0, sizeof(struct packet_wrapper));
     memset(&resp, 0, sizeof(struct packet_wrapper));
-    ret = parse_packet(&req, buffer, len);
+    ret = parse_packet(&req, CMD_RCV_BUF, len);
     if (ret == 0) {
         indigo_logger(LOG_LEVEL_DEBUG, "Server: Parsed packet successfully");
     } else {
         indigo_logger(LOG_LEVEL_ERROR, "Server: Failed to parse the packet");
         fill_wrapper_ack(&resp, req.hdr.seq, 0x31, "Unable to parse the packet");
-        len = assemble_packet(buffer, BUFFER_LEN, &resp);
+        len = assemble_packet(CMD_RCV_BUF, BUFFER_LEN, &resp);
 
-        sendto(sock, (const char *)buffer, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen); 
+        sendto(sock, (const char *)CMD_RCV_BUF, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen); 
         goto done;
     }
 
@@ -150,8 +161,8 @@ static void control_receive_message(int sock, void *eloop_ctx, void *sock_ctx) {
     } else {
         indigo_logger(LOG_LEVEL_ERROR, "API Unknown (0x%04x): No registered handler", req.hdr.type);
         fill_wrapper_ack(&resp, req.hdr.seq, 0x31, "Unable to find the API handler");
-        len = assemble_packet(buffer, BUFFER_LEN, &resp);
-        sendto(sock, (const char *)buffer, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen); 
+        len = assemble_packet(CMD_RCV_BUF, BUFFER_LEN, &resp);
+        sendto(sock, (const char *)CMD_RCV_BUF, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen); 
         goto done;
     }
 
@@ -159,14 +170,14 @@ static void control_receive_message(int sock, void *eloop_ctx, void *sock_ctx) {
     if (api->verify == NULL || (api->verify && api->verify(&req, &resp) == 0)) {
         indigo_logger(LOG_LEVEL_INFO, "API %s: Return ACK", api->name);
         fill_wrapper_ack(&resp, req.hdr.seq, 0x30, "ACK: Command received");
-        len = assemble_packet(buffer, BUFFER_LEN, &resp);
-        sendto(sock, (const char *)buffer, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen);
+        len = assemble_packet(CMD_RCV_BUF, BUFFER_LEN, &resp);
+        sendto(sock, (const char *)CMD_RCV_BUF, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen);
         free_packet_wrapper(&resp);
     } else {
         indigo_logger(LOG_LEVEL_ERROR, "API %s: Failed to verify and return NACK", api->name);
         fill_wrapper_ack(&resp, req.hdr.seq, 1, "Unable to find the API handler");
-        len = assemble_packet(buffer, BUFFER_LEN, &resp);
-        sendto(sock, (const char *)buffer, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen); 
+        len = assemble_packet(CMD_RCV_BUF, BUFFER_LEN, &resp);
+        sendto(sock, (const char *)CMD_RCV_BUF, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen); 
         goto done;
     }
 
@@ -174,8 +185,8 @@ static void control_receive_message(int sock, void *eloop_ctx, void *sock_ctx) {
     /* Handle & Response. Call API handle(), assemble packet by response wrapper and send back to source address. */
     if (api->handle && api->handle(&req, &resp) == 0) {
         indigo_logger(LOG_LEVEL_INFO, "API %s: Return execution result", api->name);
-        len = assemble_packet(buffer, BUFFER_LEN, &resp);
-        sendto(sock, (const char *)buffer, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen); 
+        len = assemble_packet(CMD_RCV_BUF, BUFFER_LEN, &resp);
+        sendto(sock, (const char *)CMD_RCV_BUF, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen); 
     } else {
         indigo_logger(LOG_LEVEL_DEBUG, "API %s (0x%04x): No handle function", api ? api->name : "Unknown", req.hdr.type);
     }
@@ -184,6 +195,7 @@ done:
     /* Clean up resource */
     free_packet_wrapper(&req);
     free_packet_wrapper(&resp);
+   // free(buffer);
     indigo_logger(LOG_LEVEL_DEBUG, "API %s: Complete", api ? api->name : "Unknown");
 }
 
@@ -350,6 +362,12 @@ int qt_main(int argc, char* argv[]) {
 
     /* Start eloop */
     qt_eloop_init(NULL);
+
+    CMD_RCV_BUF = malloc(BUFFER_LEN);
+    if(!CMD_RCV_BUF) {
+	    indigo_logger(LOG_LEVEL_ERROR, "Malloc Failure for RCV_BUF");
+	    return -ENOMEM;
+     }
 
     /* Register SIGTERM */
 /*    eloop_register_signal(SIGINT, handle_term, NULL);

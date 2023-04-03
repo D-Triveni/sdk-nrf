@@ -85,12 +85,14 @@ int qt_eloop_register_read_sock(int sock,
 {
 	struct eloop_sock *tmp;
 
+	indigo_logger(LOG_LEVEL_INF, "%s-%d", __func__, __LINE__);
 	tmp = (struct eloop_sock *)
 		realloc(eloop.readers,
 			(eloop.reader_count + 1) * sizeof(struct eloop_sock));
 	if (tmp == NULL)
 		return -1;
 
+	indigo_logger(LOG_LEVEL_INF, "%s-%d", __func__, __LINE__);
 	tmp[eloop.reader_count].sock = sock;
 	tmp[eloop.reader_count].eloop_data = eloop_data;
 	tmp[eloop.reader_count].user_data = user_data;
@@ -135,6 +137,7 @@ int qt_eloop_register_timeout(unsigned int secs, unsigned int usecs,
 	timeout = (struct eloop_timeout *) malloc(sizeof(*timeout));
 	if (timeout == NULL)
 		return -1;
+	indigo_logger(LOG_LEVEL_INF,"%s-%d", __func__, __LINE__);
 	gettimeofday(&timeout->time, NULL);
 	timeout->time.tv_sec += secs;
 	timeout->time.tv_usec += usecs;

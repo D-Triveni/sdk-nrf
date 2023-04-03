@@ -34,6 +34,7 @@ int init_usb(void)
 void main(void)
 {
 	struct in_addr addr;
+	int ret;
 
 #ifdef CLOCK_FEATURE_HFCLK_DIVIDE_PRESENT
 	/* For now hardcode to 128MHz */
@@ -71,8 +72,25 @@ void main(void)
 		printk("Cannot find network interface: %s", "wlan0");
 		return;
 	}
+	if (sizeof(CONFIG_NET_CONFIG_MY_IPV4_ADDR) > 1) {
+		if (net_addr_pton(AF_INET, CONFIG_NET_CONFIG_MY_IPV4_ADDR, &addr)) {
+			printk("Invalid address: %s", CONFIG_NET_CONFIG_MY_IPV4_ADDR);
+			return;
+		}
+		ret = net_if_ipv4_addr_add(wifi_iface, &addr, NET_ADDR_MANUAL, 0);
+		printk("ret:%d", ret);
+	}
+	if (sizeof(CONFIG_NET_CONFIG_MY_IPV4_NETMASK) > 1) {
+		/* If not empty */
+		if (net_addr_pton(AF_INET, CONFIG_NET_CONFIG_MY_IPV4_NETMASK, &addr)) {
+			printk("Invalid netmask: %s", CONFIG_NET_CONFIG_MY_IPV4_NETMASK);
+		} else {
+			net_if_ipv4_set_netmask(wifi_iface, &addr);
+		}
+	}
 	/* As both are Ethernet, we need to set specific interface*/
 	net_if_set_default(wifi_iface);
 
 	net_config_init_app(dev, "Initializing network");
+	
 }

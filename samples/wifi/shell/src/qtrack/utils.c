@@ -291,8 +291,9 @@ int loopback_socket = 0;
 static void loopback_server_receive_message(int sock, void *eloop_ctx, void *sock_ctx) {
     struct sockaddr_storage from;
     unsigned char buffer[BUFFER_LEN];
-    int fromlen, len;
+    int fromlen, len, ret;
 
+    indigo_logger(LOG_LEVEL_INF, "%s-%d", __func__, __LINE__);
     fromlen = sizeof(from);
     len = recvfrom(sock, buffer, BUFFER_LEN, 0, (struct sockaddr *) &from, &fromlen);
     if (len < 0) {
@@ -301,15 +302,25 @@ static void loopback_server_receive_message(int sock, void *eloop_ctx, void *soc
     }
 
     indigo_logger(LOG_LEVEL_INFO, "Loopback server received length = %d", len);
-
     len = sendto(sock, (const char *)buffer, len, MSG_CONFIRM, (struct sockaddr *)&from, sizeof(from));
+    if (len < 0) {
+        indigo_logger(LOG_LEVEL_INF, "Loopback server sendto[server] error:%d", strerror(errno));
+    } 
+    else {
+	char ip[NI_MAXHOST];
 
+	struct sockaddr_in *sa = (struct sockaddr_in *) &from;
+	inet_ntop(AF_INET, &sa->sin_addr, ip, INET_ADDRSTRLEN);
+	uint16_t port_ = ntohs(sa->sin_port);
+        indigo_logger(LOG_LEVEL_INF, "Loopback server sent %d pkts to %s on port :%d", len, ip, port_);
+    }
     indigo_logger(LOG_LEVEL_INFO, "Loopback server echo back length = %d", len);
+    
 }
 
 static void loopback_server_timeout(void *eloop_ctx, void *timeout_ctx) {
     int s = (intptr_t)eloop_ctx;
-    eloop_unregister_read_sock(s);
+    qt_eloop_unregister_read_sock(s);
     close(s);
     loopback_socket = 0;
     indigo_logger(LOG_LEVEL_INFO, "Loopback server stops");
@@ -443,6 +454,7 @@ int loopback_server_start(char *local_ip, char *local_port, int timeout) {
     struct sockaddr_in addr;
     socklen_t len = sizeof(addr);
 
+    indigo_logger(LOG_LEVEL_INFO, "%s-%d:%s", __func__, __LINE__, local_ip);
    /* Open UDP socket */
     s = socket(PF_INET, SOCK_DGRAM, 0);
     if (s < 0) {
@@ -453,12 +465,13 @@ int loopback_server_start(char *local_ip, char *local_port, int timeout) {
     /* Bind specific IP */
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    if (local_ip) {
+    /*if (local_ip) {
         addr.sin_addr.s_addr = inet_addr(local_ip);
-    }
+    }*/
 
+        addr.sin_addr.s_addr = INADDR_ANY;
     if (bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-        indigo_logger(LOG_LEVEL_ERROR, "Failed to bind server socket");
+        indigo_logger(LOG_LEVEL_ERROR, "Failed to bind server socket - %s", strerror(errno));
         close(s);
         return -1;
     }
@@ -468,17 +481,17 @@ int loopback_server_start(char *local_ip, char *local_port, int timeout) {
         close(s);
         return -1;
     } else {
-        indigo_logger(LOG_LEVEL_INFO, "loopback server port number %d\n", ntohs(addr.sin_port));
+        indigo_logger(LOG_LEVEL_INFO, "loopback server port number %d", ntohs(addr.sin_port));
         sprintf(local_port, "%d", ntohs(addr.sin_port));
     }
 
     /* Register to eloop and ready for the socket event */
-    if (eloop_register_read_sock(s, loopback_server_receive_message, NULL, NULL)) {
+    if (qt_eloop_register_read_sock(s, loopback_server_receive_message, NULL, NULL)) {
         indigo_logger(LOG_LEVEL_ERROR, "Failed to initiate ControlAppC");
         return -1;
     }
     loopback_socket = s;
-    eloop_register_timeout(timeout, 0, loopback_server_timeout, (void*)(intptr_t)s, NULL);
+    qt_eloop_register_timeout(timeout, 0, loopback_server_timeout, (void*)(intptr_t)s, NULL);
     indigo_logger(LOG_LEVEL_INFO, "Loopback Client starts ip %s port %s", local_ip, local_port);
 
     return 0;
@@ -486,8 +499,8 @@ int loopback_server_start(char *local_ip, char *local_port, int timeout) {
 
 int loopback_server_stop() {
     if (loopback_socket) {
-        eloop_cancel_timeout(loopback_server_timeout, (void*)(intptr_t)loopback_socket, NULL);
-        eloop_unregister_read_sock(loopback_socket);
+        qt_eloop_cancel_timeout(loopback_server_timeout, (void*)(intptr_t)loopback_socket, NULL);
+        qt_eloop_unregister_read_sock(loopback_socket);
         close(loopback_socket);
         loopback_socket = 0;
     }
@@ -880,7 +893,24 @@ int find_interface_ip(char *ipaddr, int ipaddr_len, char *name) {
     }
     freeifaddrs(ifap);
     return 0;
+#else
+/*     struct in_addr *in = NULL;
+     STRUCT_SECTION_FOREACH(net_if, iface) {
+	const struct device *dev = net_if_get_device(iface);
+	indigo_logger(LOG_LEVEL_INFO,"%s-%d:%s", __func__, __LINE__,
+			net_sprint_addr(AF_INET, &iface->config.dhcpv4.requested_ip));
+	if (!(strcmp(dev->name, name))) {
+	     in = &iface->config.dhcpv4.requested_ip;
+	     //net_addr_ntop(AF_INET, &iface->config.ip.ipv4->unicast[0].address.in_addr.s_addr, ipaddr, NET_IPV4_ADDR_LEN);
+	     sprintf(ipaddr, "%s", net_sprint_addr(AF_INET, in));
+	    indigo_logger(LOG_LEVEL_INFO,"%s", ipaddr);
+	    return 1;
+	}
+     }*/
+
+     return 0;
 #endif
+
 }
 
 int get_mac_address(char *buffer, int size, char *interface) {
@@ -907,13 +937,17 @@ done:
     {
 	const struct device *dev = net_if_get_device(iface);
 	   if(!strcmp(dev->name, interface)) {
-		memcpy(buffer, iface->if_dev->link_addr.addr, iface->if_dev->link_addr.len);
-	   } else {
-		  return 1;
-           } 
+		indigo_logger(LOG_LEVEL_INFO, "%s-%d orig:%02x:%02x:%02x:%02x:%02x:%02x", __func__, __LINE__, iface->if_dev->link_addr.addr[0]&0xff,iface->if_dev->link_addr.addr[1]&0xff,
+				iface->if_dev->link_addr.addr[2]&0xff,iface->if_dev->link_addr.addr[3]&0xff,iface->if_dev->link_addr.addr[4]&0xff,iface->if_dev->link_addr.addr[5]&0xff);
+		sprintf(buffer, "%02x:%02x:%02x:%02x:%02x:%02x", iface->if_dev->link_addr.addr[0]&0xff, iface->if_dev->link_addr.addr[1]&0xff,
+			       iface->if_dev->link_addr.addr[2]&0xff, iface->if_dev->link_addr.addr[3]&0xff,
+				iface->if_dev->link_addr.addr[4]&0xff, iface->if_dev->link_addr.addr[5]&0xff);	       
+		indigo_logger(LOG_LEVEL_INFO, "%s-%d copy:%s", __func__, __LINE__, buffer);
+		return 0;
+           }
     }
 
-    return 0;
+    return 1;
 #endif
 }
 

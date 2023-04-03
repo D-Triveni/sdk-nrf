@@ -117,6 +117,7 @@ struct tlv_hdr *find_wrapper_tlv_by_id(struct packet_wrapper *wrapper, int id) {
     for (i = 0; i < TLV_NUM; i++) {
         if (wrapper->tlv[i]) {
             if (wrapper->tlv[i]->id == id) {
+		indigo_logger(LOG_LEVEL_INFO,"%s-%d:%s", __func__, __LINE__, wrapper->tlv[i]->value);
                 return wrapper->tlv[i];
             }
         }
@@ -225,6 +226,8 @@ int parse_tlv(struct tlv_hdr *tlv, char *packet, int packet_len) {
     tlv->len = packet[2];
     tlv->value = (char*)malloc(sizeof(char) * tlv->len);
     memcpy(tlv->value, &packet[3], tlv->len);
+    tlv->value[tlv->len] = '\0';
+    indigo_logger(LOG_LEVEL_INFO, "TLV-VALUE:%s", tlv->value);
 
     return tlv->len+3;
 }
