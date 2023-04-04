@@ -199,14 +199,16 @@ done:
     int ret, status = TLV_VALUE_STATUS_NOT_OK;
     char *message = TLV_VALUE_RESET_NOT_OK;
 
-    ret = shell_execute_cmd(NULL, "wpa_cli disconnect");
-
     status = TLV_VALUE_STATUS_OK;
     message = TLV_VALUE_RESET_OK;
 
     fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
     fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
     fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
+
+    k_msleep(500);
+
+    ret = shell_execute_cmd(NULL, "reboot");
 
     return 0;
 #endif
