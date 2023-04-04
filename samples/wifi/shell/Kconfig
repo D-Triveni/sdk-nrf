@@ -12,3 +12,9 @@ config NRF7002_QUICK_TRACK
 	bool "Flag to compile zephyr code"
 	default n
 endmenu
+
+config WFA_QT_THREAD_STACK_SIZE
+	int "Thread stack size"
+	default 4096
+	help
+	  Thread stack size.

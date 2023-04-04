@@ -49,6 +49,16 @@ static void usage();
 /* External variables */
 extern int capture_packet; /* debug. Write the received packets to files */
 extern int debug_packet;   /* used by the packet hexstring print */
+void qt_main(void);
+K_THREAD_DEFINE(qt_main_tid,
+                CONFIG_WFA_QT_THREAD_STACK_SIZE,
+                qt_main,
+                NULL,
+                NULL,
+                NULL,
+                0,
+                0,
+                0);
 
 /* Initiate the service port. */
 static int control_socket_init(int port) {
@@ -308,18 +318,18 @@ static void handle_term(int sig, void *eloop_ctx, void *signal_ctx) {
     vendor_deinit();
 }
 
-int qt_main(int argc, char* argv[]) {
+void qt_main(void) {
     //int service_socket = -1;
     int ret =0;
 
     pthread_attr_t ptAttr;
     struct sched_param ptSchedParam;
+    void *main_thread_stack;
     int ptPolicy;
     /* Welcome message */
     print_welcome();
 
     /* Initiate the application */
-    set_wireless_interface(WIRELESS_INTERFACE_DEFAULT);       // Set default wireless interface information
   /*  set_hapd_full_exec_path(HAPD_EXEC_FILE_DEFAULT);          // Set default hostapd execution file path
     set_hapd_ctrl_path(HAPD_CTRL_PATH_DEFAULT);               // Set default hostapd control interface path
     set_hapd_global_ctrl_path(HAPD_GLOBAL_CTRL_PATH_DEFAULT); // Set default hostapd global control interface path
@@ -329,14 +339,13 @@ int qt_main(int argc, char* argv[]) {
     set_wpas_global_ctrl_path(WPAS_GLOBAL_CTRL_PATH_DEFAULT); // Set default wap_supplicant global control interface path
     set_wpas_conf_file(WPAS_CONF_FILE_DEFAULT);               // Set default wap_supplicant configuration file path*/
 
-    /* Parse the application arguments */
-    if (parse_parameters(argc, argv)) {
-        return 0;
-    }
-/*
+    /*
 #ifndef _OPENWRT_
     system("mkdir -p /etc/hostapd/");
 #endif*/
+
+    set_service_port(SERVICE_PORT_DEFAULT);                   // Set default service port
+    set_wireless_interface(WIRELESS_INTERFACE_DEFAULT);       // Set default wireless interface information
 
     /* Print the run-time information */
     indigo_logger(LOG_LEVEL_INFO, "QuickTrack control app running at: %d", get_service_port());

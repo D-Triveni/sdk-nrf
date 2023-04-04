@@ -27,7 +27,7 @@ target_include_directories(app PUBLIC ${ZEPHYR_BASE}/subsys/net/ip)
 
 target_sources(app PRIVATE
 	src/wifi_main.c
-	src/wfa_qt_shell.c
+	#src/wfa_qt_shell.c
 	src/qtrack/indigo_api_callback_dut.c
 	src/qtrack/vendor_specific_dut.c
 	src/qtrack/eloop.c
