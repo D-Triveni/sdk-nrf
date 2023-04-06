@@ -121,4 +121,23 @@ config NRF700X_SCAN_LIMIT
 	int "Maximum number of scan results returned to application. Use negative values for unlimited scan results."
 	default -1
 
+config NRF700X_ANT_GAIN_2G
+	int "Antenna gain for 2.4 GHz band"
+	default 0
+	range 0 6
+
+config NRF700X_ANT_GAIN_5G_BAND1
+	int "Antenna gain for 5 GHz band (5150 MHz - 5350 MHz)"
+	default 0
+	range 0 6
+
+config NRF700X_ANT_GAIN_5G_BAND2
+	int "Antenna gain for 5 GHz band (5470 MHz - 5730 MHz)"
+	default 0
+	range 0 6
+
+config NRF700X_ANT_GAIN_5G_BAND3
+	int "Antenna gain for 5 GHz band (5730 MHz - 5895 MHz)"
+	default 0
+	range 0 6
 endif
