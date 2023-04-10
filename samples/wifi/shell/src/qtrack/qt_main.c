@@ -196,7 +196,11 @@ static void control_receive_message(int sock, void *eloop_ctx, void *sock_ctx) {
     if (api->handle && api->handle(&req, &resp) == 0) {
         indigo_logger(LOG_LEVEL_INFO, "API %s: Return execution result", api->name);
         len = assemble_packet(CMD_RCV_BUF, BUFFER_LEN, &resp);
-        sendto(sock, (const char *)CMD_RCV_BUF, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen); 
+        sendto(sock, (const char *)CMD_RCV_BUF, len, MSG_CONFIRM, (const struct sockaddr *) &from, fromlen);
+        if(!strcmp(api->name, "DEVICE_RESET")) {
+		k_msleep(500);
+		shell_execute_cmd(NULL, "kernel reboot cold");
+	}
     } else {
         indigo_logger(LOG_LEVEL_DEBUG, "API %s (0x%04x): No handle function", api ? api->name : "Unknown", req.hdr.type);
     }
@@ -324,7 +328,6 @@ void qt_main(void) {
 
     pthread_attr_t ptAttr;
     struct sched_param ptSchedParam;
-    void *main_thread_stack;
     int ptPolicy;
     /* Welcome message */
     print_welcome();
@@ -344,7 +347,7 @@ void qt_main(void) {
     system("mkdir -p /etc/hostapd/");
 #endif*/
 
-    set_service_port(SERVICE_PORT_DEFAULT);                   // Set default service port
+    set_service_port(9004);                   // Set default service port
     set_wireless_interface(WIRELESS_INTERFACE_DEFAULT);       // Set default wireless interface information
 
     /* Print the run-time information */

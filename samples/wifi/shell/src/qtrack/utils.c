@@ -293,6 +293,7 @@ static void loopback_server_receive_message(int sock, void *eloop_ctx, void *soc
     unsigned char buffer[BUFFER_LEN];
     int fromlen, len, ret;
 
+    memset(buffer,'\0', BUFFER_LEN);
     indigo_logger(LOG_LEVEL_INF, "%s-%d", __func__, __LINE__);
     fromlen = sizeof(from);
     len = recvfrom(sock, buffer, BUFFER_LEN, 0, (struct sockaddr *) &from, &fromlen);
@@ -1509,7 +1510,11 @@ char* get_all_hapd_conf_files(int *swap_hapd) {
 }
 
 char* get_wireless_interface() {
+#ifndef CONFIG_NRF7002_QUICK_TRACK
     return get_default_wireless_interface_info();
+#else
+    return "wlan0";
+#endif
 }
 
 int set_wireless_interface(char *name) {
@@ -1517,6 +1522,7 @@ int set_wireless_interface(char *name) {
     interface_count = 0;
 
     if (strstr(name, ":") || strstr(name, ",")) {
+	    indigo_logger(LOG_LEVEL_INFO, "%s-%s", __func__,name);
         return parse_wireless_interface_info(name);
     } else {
 #ifdef _LAPTOP_

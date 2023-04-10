@@ -197,16 +197,10 @@ done:
     fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
     fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
 #else
-    int ret, status = TLV_VALUE_STATUS_NOT_OK;
-    char *message = TLV_VALUE_RESET_NOT_OK;
+    int ret, status = TLV_VALUE_STATUS_OK;
+    char *message = TLV_VALUE_RESET_OK;
 
     indigo_logger(LOG_LEVEL_INFO,"%s-%d", __func__, __LINE__);
-    ret = shell_execute_cmd(NULL, "wpa_cli disconnect");
-    //Need to start app again and send response to QTrack
-    printf("\n %d \n", ret);
-
-    status = TLV_VALUE_STATUS_OK;
-    message = TLV_VALUE_RESET_OK;
 
     fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
     fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
@@ -2106,6 +2100,7 @@ done:
 
 static struct wifi_connect_req_params params;
 char ap_ssid[64];
+char ap_psk[64];
     
 static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapper *resp) {
 #ifndef CONFIG_NRF7002_QUICK_TRACK
@@ -2129,44 +2124,81 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
 #else
     struct tlv_hdr *tlv;
     char *message = "DUT configured as STA : Configuration file created";
+    int ret = 0;
+    char buffer[128] = {0};
 
-    memset(&params, 0, sizeof(struct wifi_connect_req_params));
+    ret = shell_execute_cmd(NULL, "wpa_cli remove_network 0");
+    ret = shell_execute_cmd(NULL, "wpa_cli add_network 0");
+
     indigo_logger(LOG_LEVEL_INFO, "%s-%d", __func__, __LINE__);
+    /* Reading SSID*/
     tlv = find_wrapper_tlv_by_id(req, TLV_STA_SSID);
     if(tlv) {
-            params.ssid = tlv->value;
-	    params.ssid_length = tlv->len;
-	    strncpy(ap_ssid, params.ssid, params.ssid_length);
-   	    indigo_logger(LOG_LEVEL_INFO, "ssid: %s", params.ssid);
-   	    indigo_logger(LOG_LEVEL_INFO, "ssid_ap: %s", ap_ssid);
+	    strncpy(ap_ssid, tlv->value, tlv->len);
+	    sprintf(buffer, "wpa_cli set_network 0 ssid '\"%s\"'", ap_ssid);
+	    indigo_logger(LOG_LEVEL_INFO, "ap_ssid: %s", ap_ssid);
+	    sprintf(buffer, "wpa_cli set_network 0 ssid '\"%s\"'", ap_ssid);
+	    ret = shell_execute_cmd(NULL, buffer);
     }
-    tlv = find_wrapper_tlv_by_id(req, TLV_KEY_MGMT);
-    if(tlv) {
-	    if (!strcmp(tlv->value, "OPEN") ||!strcmp(tlv->value, "NONE"))
-		params.security = 0;
-	    if (!strcmp(tlv->value, "WPA-PSK"))
-		params.security = 1;
-	    if (!strcmp(tlv->value, "WPA2-PSK-SHA256"))
-		params.security = 2;
-	    if (!strcmp(tlv->value, "SAE"))
-		params.security = 3;
-    }
-    indigo_logger(LOG_LEVEL_INFO, "%d", params.security);
+    /*Reading PSK*/
     tlv = find_wrapper_tlv_by_id(req, TLV_PSK);
     if(tlv) {
-	    if ((params.security == 2) ||(params.security == 1)) {
-            	params.psk = tlv->value;
-	    	params.psk_length = tlv->len;
-	     } else if (params.security == 3) {
-            	params.sae_password = tlv->value;
-	    	params.sae_password_length = tlv->len;
-	     }
+	    strncpy(ap_psk, tlv->value, tlv->len);
+	    indigo_logger(LOG_LEVEL_INFO, "ap_psk: %s", ap_psk);
     }
-    indigo_logger(LOG_LEVEL_INFO, "%s", params.sae_password);
+    /* SAE Password Element*/
+    tlv = find_wrapper_tlv_by_id(req, TLV_SAE_PWE);
+    if(tlv) {
+	ret = shell_execute_cmd(NULL, "wpa_cli set sae_pwe 2");
+    }
+    tlv = find_wrapper_tlv_by_id(req, TLV_PROTO);
+    if(tlv) {
+	sprintf(buffer, "wpa_cli set proto %s", tlv->value);
+	ret = shell_execute_cmd(NULL, buffer);
+    }
+    /*Reading KEY_MGMT*/
+    tlv = find_wrapper_tlv_by_id(req, TLV_KEY_MGMT);
+    if(tlv) {
+	    if(strstr(tlv->value, "OPEN") || strstr(tlv->value, "NONE")) { /*Open Mode*/
+		    ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 key_mgmt NONE");
+		    ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 ieee80211w 1");
+	    } else if(strstr(tlv->value, "WPA-PSK") && !strstr(tlv->value, "SAE")) { /*WPA Mode*/
+		     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 key_mgmt WPA-PSK WPA-PSK-SHA256");
+		     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 auth_alg OPEN");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 group CCMP");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 pairwise CCMP");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 ieee80211w 1");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set pmf 1");
+                     ret = shell_execute_cmd(NULL, "wpa_cli sta_autoconnect 1");
+		     sprintf(buffer, "wpa_cli set_network 0 psk '\"%s\"'", ap_psk);
+		     ret = shell_execute_cmd(NULL, buffer);
+	    } else if(!strstr(tlv->value, "WPA-PSK") && strstr(tlv->value, "SAE")) { /*SAE only*/
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0  pairwise CCMP");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 group CCMP");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 key_mgmt SAE");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 ieee80211w 2");
+                     sprintf(buffer, "wpa_cli set_network 0 sae_password '\"%s\"'", ap_psk);;
+                     ret = shell_execute_cmd(NULL, buffer);
+	    } else if(strstr(tlv->value, "WPA-PSK") && strstr(tlv->value, "WPA-PSK")) { /*Transition Mode*/
+                     ret = shell_execute_cmd(NULL, "wpa_cli disable_network 0");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0  pairwise CCMP");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 group CCMP");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 key_mgmt WPA-PSK SAE");
+                     ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 ieee80211w 1");
+                     sprintf(buffer, "wpa_cli set_network 0 sae_password '\"%s\"'", ap_psk);
+                     ret = shell_execute_cmd(NULL, buffer);
+		     sprintf(buffer, "wpa_cli set_network 0 psk '\"%s\"'", ap_psk);
+		     ret = shell_execute_cmd(NULL, buffer);
+	    }
+    }
+
+    ret = shell_execute_cmd(NULL, "wpa_cli enable_network 0");
+    ret = shell_execute_cmd(NULL, "wpa_cli select_network 0");
 
     fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
     fill_wrapper_tlv_byte(resp, TLV_STATUS, TLV_VALUE_STATUS_OK);
     fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
+
     return 0;
 #endif
 }
@@ -2202,32 +2234,16 @@ static int associate_sta_handler(struct packet_wrapper *req, struct packet_wrapp
     message = TLV_VALUE_WPA_S_START_UP_OK;
 
 done:
-    fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
+    fill_wrapper_message_hdSAEr(resp, API_CMD_RESPONSE, req->hdr.seq);
     fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
     fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
     return 0;
 #else
-    indigo_logger(LOG_LEVEL_INFO, "ssid_ap: %s", ap_ssid);
-    indigo_logger(LOG_LEVEL_INFO,"%s", params.ssid);
-    int ret, k, status;
-    struct tlv_hdr *tlv;
-    char *message = TLV_VALUE_WPA_S_ASSOC_NOT_OK;
-    char cmd_str[128];
-    char *passwrd = "12345678";
+    char *message = TLV_VALUE_WPA_S_START_UP_NOT_OK;
+    int ret, status = TLV_VALUE_STATUS_NOT_OK;
 
-    memset(cmd_str, 0, 128);
-    indigo_logger(LOG_LEVEL_INFO,"%s-%d", __func__, __LINE__);
-    indigo_logger(LOG_LEVEL_INFO,"%s", params.ssid);
-    if(params.security == 1 || params.security == 2) {
-    	sprintf(cmd_str, "wifi connect %s %s %d", ap_ssid, passwrd, params.security);
-    } else if (params.security == 3) {
-    		sprintf(cmd_str, "wifi connect %s %s %d", ap_ssid, passwrd, params.security);
-    } else {
-    		sprintf(cmd_str, "wifi connect %s", ap_ssid);
-    }
-    ret = shell_execute_cmd(NULL, cmd_str);
-    printf("\n %d \n", ret);
-    printf("\n %s \n", cmd_str);
+    ret = shell_execute_cmd(NULL, "wpa_cli select_network 0");
+
     sleep(2);
 
     status = TLV_VALUE_STATUS_OK;
@@ -2236,6 +2252,7 @@ done:
     fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
     fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
     fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
+
     return 0;
 #endif
 }
@@ -2279,6 +2296,7 @@ done:
 }
 
 static int send_sta_reconnect_handler(struct packet_wrapper *req, struct packet_wrapper *resp) {
+#ifndef CONFIG_NRF7002_QUICK_TRACK
     struct wpa_ctrl *w = NULL;
     char *message = TLV_VALUE_WPA_S_RECONNECT_NOT_OK;
     char buffer[256], response[1024];
@@ -2314,6 +2332,21 @@ done:
         wpa_ctrl_close(w);
     }
     return 0;
+#else
+    int ret, status;
+    char *message = TLV_VALUE_WPA_S_RECONNECT_NOT_OK;
+
+    ret = shell_execute_cmd(NULL, "wpa_cli reassociate");
+
+    status = TLV_VALUE_STATUS_OK;
+    message = TLV_VALUE_WPA_S_RECONNECT_OK;
+
+    fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
+    fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
+    fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
+
+    return 0;
+#endif
 }
 
 static int set_sta_parameter_handler(struct packet_wrapper *req, struct packet_wrapper *resp) {
