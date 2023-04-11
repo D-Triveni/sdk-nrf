@@ -2136,7 +2136,7 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
     if(tlv) {
 	    strncpy(ap_ssid, tlv->value, tlv->len);
 	    sprintf(buffer, "wpa_cli set_network 0 ssid '\"%s\"'", ap_ssid);
-	    indigo_logger(LOG_LEVEL_INFO, "ap_ssid: %s", ap_ssid);
+	    indigo_logger(LOG_LEVEL_INFO, "ap_ssid: %s", buffer);
 	    ret = shell_execute_cmd(NULL, buffer);
     }
     /*Reading PSK*/
@@ -2176,7 +2176,8 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
                      ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 group CCMP");
                      ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 key_mgmt SAE");
                      ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 ieee80211w 2");
-                     sprintf(buffer, "wpa_cli set_network 0 sae_password %s", ap_psk);;
+                     ret = shell_execute_cmd(NULL, "wpa_cli set pmf 2");
+		     sprintf(buffer, "wpa_cli set_network 0 sae_password '\"%s\"'", ap_psk);
 		     indigo_logger(LOG_LEVEL_INFO, "sae: %s", buffer);
                      ret = shell_execute_cmd(NULL, buffer);
 	    } else if(strstr(tlv->value, "WPA-PSK") && strstr(tlv->value, "WPA-PSK")) { /*Transition Mode*/
