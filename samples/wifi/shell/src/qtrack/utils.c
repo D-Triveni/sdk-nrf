@@ -44,6 +44,8 @@ typedef uint32_t u_int32_t;
 #include "eloop.h"
 #include "linux_derived.h"
 
+char *data_buf = NULL;
+int packet_val = 0;
 /* Log */
 int stdout_level = LOG_LEVEL_DEBUG;
 int syslog_level = LOG_LEVEL_INFO;
@@ -290,20 +292,20 @@ int loopback_socket = 0;
 
 static void loopback_server_receive_message(int sock, void *eloop_ctx, void *sock_ctx) {
     struct sockaddr_storage from;
-    unsigned char buffer[BUFFER_LEN];
+    //unsigned char buffer[BUFFER_LEN];
     int fromlen, len, ret;
 
-    memset(buffer,'\0', BUFFER_LEN);
+    memset(data_buf,'\0', 1024);
     indigo_logger(LOG_LEVEL_INF, "%s-%d", __func__, __LINE__);
     fromlen = sizeof(from);
-    len = recvfrom(sock, buffer, BUFFER_LEN, 0, (struct sockaddr *) &from, &fromlen);
+    len = recvfrom(sock, data_buf, BUFFER_LEN, 0, (struct sockaddr *) &from, &fromlen);
     if (len < 0) {
         indigo_logger(LOG_LEVEL_ERROR, "Loopback server recvfrom[server] error");
         return ;
     }
 
     indigo_logger(LOG_LEVEL_INFO, "Loopback server received length = %d", len);
-    len = sendto(sock, (const char *)buffer, len, MSG_CONFIRM, (struct sockaddr *)&from, sizeof(from));
+    len = sendto(sock, (const char *)data_buf, len, MSG_CONFIRM, (struct sockaddr *)&from, sizeof(from));
     if (len < 0) {
         indigo_logger(LOG_LEVEL_INF, "Loopback server sendto[server] error:%d", strerror(errno));
     } 
@@ -316,7 +318,7 @@ static void loopback_server_receive_message(int sock, void *eloop_ctx, void *soc
         indigo_logger(LOG_LEVEL_INF, "Loopback server sent %d pkts to %s on port :%d", len, ip, port_);
     }
     indigo_logger(LOG_LEVEL_INFO, "Loopback server echo back length = %d", len);
-    
+    packet_val++;
 }
 
 static void loopback_server_timeout(void *eloop_ctx, void *timeout_ctx) {
@@ -486,9 +488,16 @@ int loopback_server_start(char *local_ip, char *local_port, int timeout) {
         sprintf(local_port, "%d", ntohs(addr.sin_port));
     }
 
+    data_buf = malloc(1024);
+    if(!data_buf) {
+	    indigo_logger(LOG_LEVEL_ERROR, "Malloc Failed");
+	    return -ENOMEM;
+    }
+
     /* Register to eloop and ready for the socket event */
     if (qt_eloop_register_read_sock(s, loopback_server_receive_message, NULL, NULL)) {
         indigo_logger(LOG_LEVEL_ERROR, "Failed to initiate ControlAppC");
+	free(data_buf);
         return -1;
     }
     loopback_socket = s;
@@ -504,6 +513,7 @@ int loopback_server_stop() {
         qt_eloop_unregister_read_sock(loopback_socket);
         close(loopback_socket);
         loopback_socket = 0;
+	free(data_buf);
     }
     return 0;
 }

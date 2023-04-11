@@ -20,7 +20,7 @@
 #include <stdbool.h>
 
 #define S_BUFFER_LEN              512
-#define BUFFER_LEN                512
+#define BUFFER_LEN                1024
 #define L_BUFFER_LEN              8192
 
 #define TOOL_POST_PORT 8080

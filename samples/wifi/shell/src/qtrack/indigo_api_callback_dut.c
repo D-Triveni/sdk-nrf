@@ -2127,8 +2127,8 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
     int ret = 0;
     char buffer[128] = {0};
 
-    ret = shell_execute_cmd(NULL, "wpa_cli remove_network 0");
-    ret = shell_execute_cmd(NULL, "wpa_cli add_network 0");
+    ret = shell_execute_cmd(NULL, "wpa_cli remove_network all");
+    ret = shell_execute_cmd(NULL, "wpa_cli add_network");
 
     indigo_logger(LOG_LEVEL_INFO, "%s-%d", __func__, __LINE__);
     /* Reading SSID*/
@@ -2137,7 +2137,6 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
 	    strncpy(ap_ssid, tlv->value, tlv->len);
 	    sprintf(buffer, "wpa_cli set_network 0 ssid '\"%s\"'", ap_ssid);
 	    indigo_logger(LOG_LEVEL_INFO, "ap_ssid: %s", ap_ssid);
-	    sprintf(buffer, "wpa_cli set_network 0 ssid '\"%s\"'", ap_ssid);
 	    ret = shell_execute_cmd(NULL, buffer);
     }
     /*Reading PSK*/
@@ -2153,7 +2152,7 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
     }
     tlv = find_wrapper_tlv_by_id(req, TLV_PROTO);
     if(tlv) {
-	sprintf(buffer, "wpa_cli set proto %s", tlv->value);
+	sprintf(buffer, "wpa_cli set_network 0 proto %s", tlv->value);
 	ret = shell_execute_cmd(NULL, buffer);
     }
     /*Reading KEY_MGMT*/
@@ -2177,7 +2176,8 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
                      ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 group CCMP");
                      ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 key_mgmt SAE");
                      ret = shell_execute_cmd(NULL, "wpa_cli set_network 0 ieee80211w 2");
-                     sprintf(buffer, "wpa_cli set_network 0 sae_password '\"%s\"'", ap_psk);;
+                     sprintf(buffer, "wpa_cli set_network 0 sae_password %s", ap_psk);;
+		     indigo_logger(LOG_LEVEL_INFO, "sae: %s", buffer);
                      ret = shell_execute_cmd(NULL, buffer);
 	    } else if(strstr(tlv->value, "WPA-PSK") && strstr(tlv->value, "WPA-PSK")) { /*Transition Mode*/
                      ret = shell_execute_cmd(NULL, "wpa_cli disable_network 0");
