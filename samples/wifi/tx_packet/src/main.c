@@ -337,6 +337,27 @@ int main(void)
 		CONFIG_NET_CONFIG_MY_IPV4_NETMASK,
 		CONFIG_NET_CONFIG_MY_IPV4_GW);
 
+	struct wifi_mode_info mode_info = {0};
+	mode_info.oper = WIFI_MGMT_SET;
+	if (mode_info.if_index == 0) {
+		iface = net_if_get_first_wifi();
+		if (iface == NULL) {
+			shell_fprintf(sh, SHELL_ERROR,
+				      "Cannot find the default wifi interface\n");
+			return -ENOEXEC;
+		}
+		mode_info.if_index = net_if_get_by_iface(iface);
+	} else {
+		iface = net_if_get_by_index(mode_info.if_index);
+		if (iface == NULL) {
+			shell_fprintf(sh, SHELL_ERROR,
+				      "Cannot find interface for if_index %d\n",
+				      mode_info.if_index);
+			return -ENOEXEC;
+		}
+	}
+
+	net_mgmt(NET_REQUEST_WIFI_MODE, iface, &mode_info, sizeof(mode_info));
 	while (1) {
 		wifi_connect();
 
