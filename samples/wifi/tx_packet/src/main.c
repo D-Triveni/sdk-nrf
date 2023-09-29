@@ -320,59 +320,112 @@ void wifi_set_mode(void)
 
 }
 
+#if 0
 int wifi_send_data(void) {
-	int ret;
-	struct net_if *iface;
-        struct packet_data pkt;
-        struct sockaddr_ll dst = { 0 };
-        int magic_num = 0x12345678;
-        unsigned char buffer[32];
-      
-      	iface = net_if_get_first_wifi();
-        struct net_linkaddr *linkaddr = net_if_get_link_addr(iface);
 
-        pkt.send_sock = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
-        if (pkt.send_sock < 0) {
+	int sock, ret;
+	struct sockaddr_in addr;
+	char buffer[] = "Hello";
+
+	sock = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
+	if (sock < 0) {
                 printk("Failed to create raw socket : %d\n", errno);
-                return -errno;	
+                return -errno;
         } else {
                 printk("raw socket created \n");
         }
 
-	dst.sll_family = AF_PACKET;
-        dst.sll_ifindex = net_if_get_by_iface(iface);
-	dst.sll_halen = WIFI_MAC_ADDR_LEN;
-	memcpy(dst.sll_addr, linkaddr->addr, WIFI_MAC_ADDR_LEN);
+	addr.sin_family = AF_PACKET;
+	addr.sin_port=IN_ANY;
+	addr.sin_addr.s_addr = INADDR_ANY;
 
-        ret = bind(pkt.send_sock, (const struct sockaddr *)&dst,
-                   sizeof(struct sockaddr_ll));
-        if (ret < 0) {
+	ret = bind(sock, (struct sockaddr *)&addr,
+                   sizeof(struct sockaddr_in));
+	if (ret < 0) {
                 printk("Failed to bind packet socket : %d\n", errno);
                 return -errno;
         } else {
                 printk("bind packet successful\n");
         }
-	memcpy(buffer, &magic_num, sizeof(unsigned int));
 
-	send_data = malloc(sizeof())
-
-        /* Sending dummy data */
-        ret = sendto(pkt.send_sock, buffer, 8, 0,
-                             (const struct sockaddr *)&dst,
-                             sizeof(struct sockaddr_ll));
-
-        if (ret < 0) {
+	ret = sendto(sock, buffer, 4, 0,
+                             (struct sockaddr *)&addr,
+                             sizeof(struct sockaddr_in));
+	if (ret < 0) {
                 printk("Failed to send, errno %d\n", errno);
         } else {
                 printk("send successful\n");
         }
 
-        (void)close(pkt.send_sock);
-        printk("socket closed \n");
-
 	return 0;
 }
+#endif
 
+#define SERVER_IP "192.168.0.100"  // Replace with your server's IP address
+#define SERVER_PORT 8080           // Replace with your server's port
+#define DATA_INTERVAL K_SECONDS(1) // Data send interval
+#define BEACON_FRAME_LEN 100       // Length of your beacon frame
+
+void wifi_send_data(void)
+{
+ //   struct sockaddr_in server_addr;
+    struct sockaddr_ll sa;
+    int sockfd, ret;
+    struct net_iface *iface;
+
+    printk("Zephyr Raw Socket Beacon Frame Example\n");
+
+    // Create a raw socket using AF_PACKET
+    sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
+    if (sockfd < 0) {
+        printk("Error: Unable to create socket\n");
+        return;
+    }
+
+     iface = net_if_get_first_wifi();
+    // Set up the server address structure
+    /*memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_port = htons(1234);
+    server_addr.sin_addr.s_addr = INADDR_ANY;*/
+
+     sa.sll_family = AF_PACKET;
+     sa.sll_protocol = htons(ETH_P_ALL); // Ethernet protocol (e.g., ETH_P_IP)
+     sa.sll_ifindex = net_if_get_by_iface(iface);
+
+
+    // Bind the socket to the network interface
+    ret = bind(sockfd, (struct sockaddr *)&sa, sizeof(struct sockaddr_ll));
+    if (ret < 0) {
+        printk("Error: Unable to bind socket to the network interface:%d\n", errno);
+        close(sockfd);
+        return;
+    }
+
+    while (1) {
+        // Construct your custom beacon frame (you will need to create your beacon frame)
+        uint8_t beacon_frame[BEACON_FRAME_LEN];
+        memset(beacon_frame, 0, BEACON_FRAME_LEN);
+
+        // Populate your beacon frame with the necessary information
+
+        // Send the beacon frame
+        ret = sendto(sockfd, beacon_frame, BEACON_FRAME_LEN, 0,
+                     (struct sockaddr *)&sa, sizeof(sa));
+        if (ret < 0) {
+            printk("Error: Unable to send beacon frame\n");
+            close(sockfd);
+            return;
+        }
+
+        printk("Beacon frame sent successfully\n");
+
+        // Sleep for 1 second before sending the next frame
+        k_sleep(DATA_INTERVAL);
+    }
+
+    // Clean up and close the socket (not reached in this example)
+    close(sockfd);
+}
 
 int main(void)
 {
