@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(tx_packet, CONFIG_LOG_DEFAULT_LEVEL);
 #include <zephyr/init.h>
 
 #include <zephyr/net/net_if.h>
+#include <zephyr/net/socket.h>
 #include <zephyr/net/wifi_mgmt.h>
 #include <zephyr/net/net_event.h>
 #include <zephyr/drivers/gpio.h>
@@ -46,6 +47,13 @@ LOG_MODULE_REGISTER(tx_packet, CONFIG_LOG_DEFAULT_LEVEL);
  * See the sample documentation for information on how to fix this.
  */
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
+
+#define RECV_BUFFER_SIZE 1000
+struct packet_data {
+        int send_sock;
+        int recv_sock;
+        char recv_buffer[RECV_BUFFER_SIZE];
+};
 
 static struct net_mgmt_event_callback wifi_shell_mgmt_cb;
 static struct net_mgmt_event_callback net_shell_mgmt_cb;
@@ -283,6 +291,89 @@ int bytes_from_str(const char *str, uint8_t *bytes, size_t bytes_len)
 	return 0;
 }
 
+void wifi_set_mode(void)
+{
+	struct net_if *iface;
+	struct wifi_mode_info mode_info = {0};
+
+	mode_info.oper = WIFI_MGMT_SET;
+	if (mode_info.if_index == 0) {
+		iface = net_if_get_first_wifi();
+		if (iface == NULL) {
+			LOG_ERR("Cannot find the default wifi interface\n");
+			return;
+		}
+		mode_info.if_index = net_if_get_by_iface(iface);
+	} else {
+		iface = net_if_get_by_index(mode_info.if_index);
+		if (iface == NULL) {
+			LOG_ERR("Cannot find interface for if_index %d\n",
+				      mode_info.if_index);
+			return;
+		}
+	}
+
+	mode_info.mode |= WIFI_TX_INJECTION_MODE ;
+
+	if (net_mgmt(NET_REQUEST_WIFI_MODE, iface, &mode_info, sizeof(mode_info)))
+		LOG_ERR("Mode set operation failed");
+
+}
+
+int wifi_send_data(void) {
+	int ret;
+	struct net_if *iface;
+        struct packet_data pkt;
+        struct sockaddr_ll dst = { 0 };
+        int magic_num = 0x12345678;
+        unsigned char buffer[32];
+      
+      	iface = net_if_get_first_wifi();
+        struct net_linkaddr *linkaddr = net_if_get_link_addr(iface);
+
+        pkt.send_sock = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
+        if (pkt.send_sock < 0) {
+                printk("Failed to create raw socket : %d\n", errno);
+                return -errno;	
+        } else {
+                printk("raw socket created \n");
+        }
+
+	dst.sll_family = AF_PACKET;
+        dst.sll_ifindex = net_if_get_by_iface(iface);
+	dst.sll_halen = WIFI_MAC_ADDR_LEN;
+	memcpy(dst.sll_addr, linkaddr->addr, WIFI_MAC_ADDR_LEN);
+
+        ret = bind(pkt.send_sock, (const struct sockaddr *)&dst,
+                   sizeof(struct sockaddr_ll));
+        if (ret < 0) {
+                printk("Failed to bind packet socket : %d\n", errno);
+                return -errno;
+        } else {
+                printk("bind packet successful\n");
+        }
+	memcpy(buffer, &magic_num, sizeof(unsigned int));
+
+	send_data = malloc(sizeof())
+
+        /* Sending dummy data */
+        ret = sendto(pkt.send_sock, buffer, 8, 0,
+                             (const struct sockaddr *)&dst,
+                             sizeof(struct sockaddr_ll));
+
+        if (ret < 0) {
+                printk("Failed to send, errno %d\n", errno);
+        } else {
+                printk("send successful\n");
+        }
+
+        (void)close(pkt.send_sock);
+        printk("socket closed \n");
+
+	return 0;
+}
+
+
 int main(void)
 {
 	memset(&context, 0, sizeof(context));
@@ -336,28 +427,20 @@ int main(void)
 		CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 		CONFIG_NET_CONFIG_MY_IPV4_NETMASK,
 		CONFIG_NET_CONFIG_MY_IPV4_GW);
-
-	struct wifi_mode_info mode_info = {0};
-	mode_info.oper = WIFI_MGMT_SET;
-	if (mode_info.if_index == 0) {
-		iface = net_if_get_first_wifi();
-		if (iface == NULL) {
-			shell_fprintf(sh, SHELL_ERROR,
-				      "Cannot find the default wifi interface\n");
-			return -ENOEXEC;
-		}
-		mode_info.if_index = net_if_get_by_iface(iface);
-	} else {
-		iface = net_if_get_by_index(mode_info.if_index);
-		if (iface == NULL) {
-			shell_fprintf(sh, SHELL_ERROR,
-				      "Cannot find interface for if_index %d\n",
-				      mode_info.if_index);
-			return -ENOEXEC;
-		}
+#ifdef CONFIG_CONNECTION_MODE
+	wifi_connect();
+	k_sleep(K_SECONDS(10));
+	if (context.connected) {
+		/* wifi_set_mode(); */
+		wifi_send_data();
 	}
+#else
+		/* wifi_set_mode(); */
+		/* Need to program channel and band */
+		wifi_send_data();
+#endif
 
-	net_mgmt(NET_REQUEST_WIFI_MODE, iface, &mode_info, sizeof(mode_info));
+#if 0
 	while (1) {
 		wifi_connect();
 
@@ -370,6 +453,7 @@ int main(void)
 			k_sleep(K_FOREVER);
 		}
 	}
+#endif
 
 	return 0;
 }
