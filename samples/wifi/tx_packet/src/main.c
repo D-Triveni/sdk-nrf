@@ -415,6 +415,7 @@ void wifi_send_data(void)
     }
 
     while (1) {
+//    for (int i = 0; i < CONFIG_RAW_TX_PACKET_APP_NUM_PACKETS || CONFIG_RAW_TX_PACKET_APP_CONTINUOUS; i++) {
         ret = sendto(sockfd, beacon_frame, sizeof(beacon_frame), 0,
                      (struct sockaddr *)&sa, sizeof(sa));
         if (ret < 0) {
@@ -428,6 +429,8 @@ void wifi_send_data(void)
         /* Sleep for 1 second before sending the next frame */
         k_sleep(DATA_INTERVAL);
     }
+       /* k_sleep(K_MSEC(CONFIG_RAW_TX_PACKET_APP_INTER_FRAME_DELAY));
+    }*/
 
     /* close the socket */
     close(sockfd);

@@ -63,4 +63,31 @@ config STA_CONN_TIMEOUT_SEC
 	  Specify the connection timeout, in seconds. This is the overall timeout i.e., time to be waited for
 	  a station to connect and get an IP address. DHCP retries should be taken into account when setting
 	  this value. If the timeout is set to 0, the connection will not timeout.
+
+choice OPERATING_MODE_SELECT
+       prompt "Choose operation mode"
+
+config CONNECTION_MODE
+       bool "Connection mode"
+       help
+         Enable this to select connection mode.
+
+config IDLE_MODE
+       bool "Disconnection mode"
+       help
+         Enable this to select disconnection mode.
+endchoice
+
+config RAW_TX_PACKET_APP_CONTINUOUS
+    bool "Continuous Transmission"
+    default y
+
+config RAW_TX_PACKET_APP_NUM_PACKETS
+    int "Number of Packets to Send"
+    default 10
+
+config RAW_TX_PACKET_APP_INTER_FRAME_DELAY
+    int "Inter-Frame Delay (ms)"
+    default 100
+
 endmenu
