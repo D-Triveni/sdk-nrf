@@ -90,4 +90,36 @@ config RAW_TX_PACKET_APP_INTER_FRAME_DELAY
     int "Inter-Frame Delay (ms)"
     default 100
 
+
+config RAW_TX_PACKET_APP_RATE_FLAGS
+    int "rate flag value"
+    default 0
+    help
+      Select the value to be set as rate flag.
+      0 - Legacy
+      1 - 11N_FORMAT
+      2 - VHT_FORMAT
+      3 - HE_SU
+      4 - HE_ER_SU
+      5 - HE_TB
+
+config RAW_TX_PACKET_APP_RATE_VALUE
+    int "Tx data rate"
+    default 4
+    help
+	# Talk to UMAC or supported rate values and also about float numbers
+        Select the TX rate value:
+        Legacy rates: 1, 2, 55, 11, 6, 9, 12, 18, 24, 36, 48, 54
+        Non-legacy: (MCS index): 0-7
+
+config RAW_TX_PACKET_APP_QUEUE_NUM
+    int "Queue Number"
+    default 0
+    help
+      Select the Queue number:
+      0 - Background
+      1 - Best effort
+      2 - Video
+      3 - Voice
+      4 - Beacon 
 endmenu

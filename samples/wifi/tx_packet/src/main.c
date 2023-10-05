@@ -313,7 +313,7 @@ void wifi_set_mode(void)
 		}
 	}
 
-	mode_info.mode |= WIFI_TX_INJECTION_MODE ;
+	mode_info.mode =  WIFI_STA_MODE | WIFI_TX_INJECTION_MODE ;
 
 	if (net_mgmt(NET_REQUEST_WIFI_MODE, iface, &mode_info, sizeof(mode_info)))
 		LOG_ERR("Mode set operation failed");
@@ -366,6 +366,45 @@ int wifi_send_data(void) {
 #define DATA_INTERVAL K_SECONDS(1) // Data send interval
 #define BEACON_FRAME_LEN 100       // Length of your beacon frame
 
+struct nrf_wifi_raw_tx_pkt {
+        /* Queue number will be BK, BE, VI, VO and BCN refer @enum UMAC_QUEUE_NUM */
+        unsigned char queue_num;
+        /* Descriptor identifier or token identifier */
+        unsigned char desc_num;
+        /* Packet lengths of frames */
+        unsigned short pkt_length;
+        /* Number of times a packet should be transmitted at each possible rate */
+        unsigned char rate_retries;
+        #define NRF_WIFI_MARK_RATE_AS_MCS_INDEX 0x80
+        #define NRF_WIFI_MARK_RATE_AS_RATE 0x00
+        /* The rate value(s) at which the packet transmission needs to be attempted */
+        unsigned char rate;
+        /* Per rate flags to specify in which format the packet needs to be transmitted */
+        #define NRF_WIFI_ENABLE_11N_FORMAT 0x08
+        #define NRF_WIFI_ENABLE_VHT_FORMAT 0x10
+        #define NRF_WIFI_ENABLE_HE_SU 0x40
+        #define NRF_WIFI_ENABLE_HE_ER_SU 0x80
+        unsigned char rate_flags;
+        /* Starting Physical address of each frame in Ext-RAM after dma_mapping */
+        unsigned int  frame_ddr_pointer;
+};
+
+struct wifi_nrf_fmac_rawpkt_info {
+        /** Magic number to distinguish packet is raw packet */
+        unsigned int magic_number;
+        /** Data rate of the packet */
+        unsigned short data_rate;
+        /** Packet length */
+        unsigned short packet_length;
+        /** Mode describing if packet is VHT, HT, HE or Legacy */
+        unsigned char tx_mode;
+        /** Wi-Fi access category mapping for packet */
+        unsigned char queue;
+        /** reserved char variable for driver */
+        unsigned char reserved;
+};
+
+# if 0
 char beacon_frame[] = {
 0x80, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xa0, 0x59, 0x50, 0xe3, 0x52, 0x15,
 0xa0, 0x59, 0x50, 0xe3, 0x52, 0x15, 0x90, 0x12,
@@ -384,13 +423,17 @@ char beacon_frame[] = {
 0x24, 0xf0, 0x3f, 0x00, 0x81, 0xfc, 0xff, 0xdd, 0x18, 0x00, 0x50, 0xf2, 0x02, 0x01, 0x01, 0x01,
 0x00, 0x03, 0xa4, 0x00, 0x00, 0x27, 0xa4, 0x00, 0x00, 0x42, 0x43, 0x5e, 0x00, 0x62, 0x32, 0x2f, 0x00
 };
+#endif
 
+char beacon_frame[] = "Hello";
 
 void wifi_send_data(void)
 {
     struct sockaddr_ll sa;
     int sockfd, ret;
     struct net_iface *iface;
+    struct wifi_nrf_fmac_rawpkt_info raw_tx_pkt;
+    char *buffer = NULL;
 
     /* Create a raw socket */
     sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
@@ -414,9 +457,29 @@ void wifi_send_data(void)
         return;
     }
 
+    raw_tx_pkt.magic_number = 0x12345678; // Set appropriate queue number
+    raw_tx_pkt.data_rate = CONFIG_RAW_TX_PACKET_APP_RATE_VALUE; // Set number of retries as needed
+    raw_tx_pkt.packet_length = sizeof(beacon_frame);
+    raw_tx_pkt.tx_mode = CONFIG_RAW_TX_PACKET_APP_RATE_FLAGS;
+    raw_tx_pkt.queue = CONFIG_RAW_TX_PACKET_APP_QUEUE_NUM; // Set the desired rate value
+    raw_tx_pkt.reserved = 0; // Set the desired rate value
+
+
+    buffer = malloc(sizeof(struct wifi_nrf_fmac_rawpkt_info) + sizeof(beacon_frame));
+    if(!buffer)
+	    return;
+
+    memcpy(buffer, &raw_tx_pkt, sizeof(struct wifi_nrf_fmac_rawpkt_info));
+
+
+    memcpy(buffer + sizeof(raw_tx_pkt), beacon_frame, sizeof(beacon_frame));
+#if 0
     while (1) {
-//    for (int i = 0; i < CONFIG_RAW_TX_PACKET_APP_NUM_PACKETS || CONFIG_RAW_TX_PACKET_APP_CONTINUOUS; i++) {
+    for (int i = 0; i < CONFIG_RAW_TX_PACKET_APP_NUM_PACKETS || CONFIG_RAW_TX_PACKET_APP_CONTINUOUS; i++) {
         ret = sendto(sockfd, beacon_frame, sizeof(beacon_frame), 0,
+                     (struct sockaddr *)&sa, sizeof(sa));
+#endif
+        ret = sendto(sockfd, buffer, sizeof(buffer), 0,
                      (struct sockaddr *)&sa, sizeof(sa));
         if (ret < 0) {
             printk("Error: Unable to send beacon frame\n");
@@ -424,14 +487,14 @@ void wifi_send_data(void)
             return;
         }
 
-        printk("Beacon frame sent successfully\n");
-
+        printk("Sending %s", beacon_frame);
+#if 0
         /* Sleep for 1 second before sending the next frame */
         k_sleep(DATA_INTERVAL);
     }
        /* k_sleep(K_MSEC(CONFIG_RAW_TX_PACKET_APP_INTER_FRAME_DELAY));
     }*/
-
+#endif
     /* close the socket */
     close(sockfd);
 }
@@ -489,15 +552,15 @@ int main(void)
 		CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 		CONFIG_NET_CONFIG_MY_IPV4_NETMASK,
 		CONFIG_NET_CONFIG_MY_IPV4_GW);
+	/* Set mode */
+	wifi_set_mode();
 #ifdef CONFIG_CONNECTION_MODE
 	wifi_connect();
 	k_sleep(K_SECONDS(10));
 	if (context.connected) {
-		wifi_set_mode();
 		wifi_send_data();
 	}
 #else
-		 wifi_set_mode();
 		/* Need to program channel and band */
 		wifi_send_data();
 #endif
