@@ -80,11 +80,11 @@ endchoice
 
 config RAW_TX_PACKET_APP_CONTINUOUS
     bool "Continuous Transmission"
-    default y
+    default n
 
 config RAW_TX_PACKET_APP_NUM_PACKETS
     int "Number of Packets to Send"
-    default 10
+    default 1
 
 config RAW_TX_PACKET_APP_INTER_FRAME_DELAY
     int "Inter-Frame Delay (ms)"
@@ -105,11 +105,10 @@ config RAW_TX_PACKET_APP_RATE_FLAGS
 
 config RAW_TX_PACKET_APP_RATE_VALUE
     int "Tx data rate"
-    default 4
+    default 1
     help
-	# Talk to UMAC or supported rate values and also about float numbers
         Select the TX rate value:
-        Legacy rates: 1, 2, 55, 11, 6, 9, 12, 18, 24, 36, 48, 54
+        Legacy: 1, 2, 55, 11, 6, 9, 12, 18, 24, 36, 48, 54
         Non-legacy: (MCS index): 0-7
 
 config RAW_TX_PACKET_APP_QUEUE_NUM
@@ -122,4 +121,11 @@ config RAW_TX_PACKET_APP_QUEUE_NUM
       2 - Video
       3 - Voice
       4 - Beacon 
+
+config RAW_TX_PACKET_APP_CHANNEL
+    int "Channel"
+    default 1
+    help
+     Use tis channel for Tx_INJECTOR mode
+
 endmenu
