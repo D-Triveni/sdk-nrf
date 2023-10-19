@@ -222,6 +222,38 @@ static int wifi_connect(void)
 	return 0;
 }
 
+static void wifi_set_mode(void)
+{
+	int ret;
+	struct net_if *iface;
+	struct wifi_mode_info mode_info = {0};
+
+	mode_info.oper = WIFI_MGMT_SET;
+
+	if (mode_info.if_index == 0) {
+		iface = net_if_get_default();
+		if (iface == NULL) {
+			LOG_ERR("Cannot find the default wifi interface");
+			return;
+		}
+		mode_info.if_index = net_if_get_by_iface(iface);
+	} else {
+		iface = net_if_get_by_index(mode_info.if_index);
+		if (iface == NULL) {
+			LOG_ERR("Cannot find interface for if_index %d",
+				      mode_info.if_index);
+			return;
+		}
+	}
+
+	mode_info.mode =  WIFI_STA_MODE | WIFI_TX_INJECTION_MODE ;
+
+	ret = net_mgmt(NET_REQUEST_WIFI_MODE, iface, &mode_info, sizeof(mode_info));
+	if (ret) {
+		LOG_ERR("Mode setting failed %d", ret);
+	}
+}
+
 int main(void)
 {
 	memset(&context, 0, sizeof(context));
@@ -245,6 +277,8 @@ int main(void)
 		CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 		CONFIG_NET_CONFIG_MY_IPV4_NETMASK,
 		CONFIG_NET_CONFIG_MY_IPV4_GW);
+
+	wifi_set_mode();
 
 	while(1) {
 		wifi_connect();
