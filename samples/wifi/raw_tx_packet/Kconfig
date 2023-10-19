@@ -61,5 +61,12 @@ config RAW_TX_PACKET_SAMPLE_IDLE_MODE
 	  Enable this to select Wi-Fi IDLE mode.
 endchoice
 
+config RAW_TX_PACKET_SAMPLE_CHANNEL
+	int "Select channel for IDLE mode"
+	range 1 233
+	help
+	  Select the Wi-Fi channel to be configured for raw tx packet transmission.
+	  The valid channel range is 1 to 233.
+
 endmenu
 
