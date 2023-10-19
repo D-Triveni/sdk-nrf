@@ -171,6 +171,7 @@ static void net_mgmt_event_handler(struct net_mgmt_event_callback *cb,
 	}
 }
 
+#ifdef CONFIG_RAW_TX_PACKET_SAMPLE_CONNECTION_MODE
 static int __wifi_args_to_params(struct wifi_connect_req_params *params)
 {
 	params->timeout = SYS_FOREVER_MS;
@@ -221,6 +222,7 @@ static int wifi_connect(void)
 
 	return 0;
 }
+#endif
 
 static void wifi_set_mode(void)
 {
@@ -280,6 +282,7 @@ int main(void)
 
 	wifi_set_mode();
 
+#ifdef CONFIG_RAW_TX_PACKET_SAMPLE_CONNECTION_MODE
 	while (1) {
 		wifi_connect();
 
@@ -294,6 +297,7 @@ int main(void)
 			LOG_ERR("Connection Timed Out");
 		}
 	}
+#endif
 
 	return 0;
 }
