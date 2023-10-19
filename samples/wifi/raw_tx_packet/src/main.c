@@ -53,6 +53,66 @@ static struct {
 	};
 } context;
 
+struct nrf_wifi_fmac_rawpkt_info {
+	/* Magic number to distinguish packet is raw packet */
+	unsigned int magic_number;
+	/* Data rate of the packet */
+	unsigned char data_rate;
+	/* Packet length */
+	unsigned short packet_length;
+	/* Mode describing if packet is VHT, HT, HE or Legacy */
+	unsigned char tx_mode;
+	/* Wi-Fi access category mapping for packet */
+	unsigned char queue;
+	/* reserved parameter for driver */
+	unsigned char reserved;
+};
+
+/* SSID: NRF_RAW_TX_PACKET_APP
+ * Transmitter Address: a0:69:60:e3:52:15
+ */
+struct beacon {
+	uint16_t frame_control;
+	uint16_t duration;
+	uint8_t da[6];
+	uint8_t sa[6];
+	uint8_t bssid[6];
+	uint16_t seq_ctrl;
+	uint8_t payload[256];
+};
+
+static const struct beacon test_beacon_frame = {
+	.frame_control = htons(0x8000),
+	.duration = 0x0000,
+	.da = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+	.sa = {0xa0, 0x69, 0x60, 0xe3, 0x52, 0x15},
+	.bssid = {0xa0, 0x69, 0x60, 0xe3, 0x52, 0x15},
+	.seq_ctrl = 0xb0a3,
+	.payload = {
+		0x0c, 0xa2, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x64, 0x00,
+		0x11, 0x04, 0x00, 0x15, 0x4E, 0x52, 0x46, 0x5f, 0x52, 0x41,
+		0x57, 0x5f, 0x54, 0x58, 0x5f, 0x50, 0x41, 0x43, 0x4b, 0x45,
+		0x54, 0x5f, 0x41, 0x50, 0x50, 0x01, 0x08, 0x82, 0x84, 0x8b,
+		0x96, 0x0c, 0x12, 0x18, 0x24, 0x03, 0x01, 0x06, 0x05, 0x04,
+		0x00, 0x02, 0x00, 0x00, 0x2a, 0x01, 0x04, 0x32, 0x04, 0x30,
+		0x48, 0x60, 0x6c, 0x30, 0x14, 0x01, 0x00, 0x00, 0x0f, 0xac,
+		0x04, 0x01, 0x00, 0x00, 0x0f, 0xac, 0x04, 0x01, 0x00, 0x00,
+		0x0f, 0xac, 0x02, 0x0c, 0x00, 0x3b, 0x02, 0x51, 0x00, 0x2d,
+		0x1a, 0x0c, 0x00, 0x17, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x2c, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x3d, 0x16, 0x06, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7f, 0x08, 0x04, 0x00,
+		0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0xff, 0x1a, 0x23, 0x01,
+		0x78, 0x10, 0x1a, 0x00, 0x00, 0x00, 0x20, 0x0e, 0x09, 0x00,
+		0x09, 0x80, 0x04, 0x01, 0xc4, 0x00, 0xfa, 0xff, 0xfa, 0xff,
+		0x61, 0x1c, 0xc7, 0x71, 0xff, 0x07, 0x24, 0xf0, 0x3f, 0x00,
+		0x81, 0xfc, 0xff, 0xdd, 0x18, 0x00, 0x50, 0xf2, 0x02, 0x01,
+		0x01, 0x01, 0x00, 0x03, 0xa4, 0x00, 0x00, 0x27, 0xa4, 0x00,
+		0x00, 0x42, 0x43, 0x5e, 0x00, 0x62, 0x32, 0x2f, 0x00
+	}
+};
+
 static int cmd_wifi_status(void)
 {
 	struct net_if *iface = net_if_get_default();
@@ -301,6 +361,89 @@ static void wifi_set_mode(void)
 	}
 }
 
+static int setup_raw_pkt_socket(int *sockfd, struct sockaddr_ll *sa)
+{
+	struct net_if *iface;
+	int ret;
+
+	*sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
+	if (*sockfd < 0) {
+		LOG_ERR("Unable to create a socket %d", errno);
+		return -1;
+	}
+
+	iface = net_if_get_default();
+	if (!iface) {
+		LOG_ERR("Unable to get default interface");
+		return -1;
+	}
+
+	sa->sll_family = AF_PACKET;
+	sa->sll_ifindex = net_if_get_by_iface(iface);
+
+	/* Bind the socket */
+	ret = bind(*sockfd, (struct sockaddr *)sa, sizeof(struct sockaddr_ll));
+	if (ret < 0) {
+		LOG_ERR("Error: Unable to bind socket to the network interface:%d", errno);
+		close(*sockfd);
+		return -1;
+	}
+
+	return 0;
+}
+
+static void fill_raw_tx_pkt_hdr(struct nrf_wifi_fmac_rawpkt_info *raw_tx_pkt)
+{
+	/* Raw Tx Packet header */
+	raw_tx_pkt->magic_number = 0x12345678;
+	raw_tx_pkt->data_rate = CONFIG_RAW_TX_PACKET_SAMPLE_RATE_VALUE;
+	raw_tx_pkt->packet_length = sizeof(test_beacon_frame);
+	raw_tx_pkt->tx_mode = CONFIG_RAW_TX_PACKET_SAMPLE_RATE_FLAGS;
+	raw_tx_pkt->queue = CONFIG_RAW_TX_PACKET_SAMPLE_QUEUE_NUM;
+	raw_tx_pkt->reserved = 0;
+}
+
+static void wifi_send_raw_tx_packet(void)
+{
+	struct sockaddr_ll sa;
+	int sockfd, ret;
+	struct nrf_wifi_fmac_rawpkt_info packet;
+	char *test_frame = NULL;
+	int buf_length;
+
+	ret = setup_raw_pkt_socket(&sockfd, &sa);
+	if (ret < 0) {
+		LOG_ERR("Setting socket for raw pkt transmission failed %d", errno);
+		return;
+	}
+
+	fill_raw_tx_pkt_hdr(&packet);
+
+	test_frame = malloc(sizeof(struct nrf_wifi_fmac_rawpkt_info) + sizeof(test_beacon_frame));
+	if (!test_frame) {
+		LOG_ERR("Malloc failed for send buffer %d", errno);
+		return;
+	}
+
+	buf_length = sizeof(struct nrf_wifi_fmac_rawpkt_info) + sizeof(test_beacon_frame);
+	memcpy(test_frame, &packet, sizeof(struct nrf_wifi_fmac_rawpkt_info));
+	memcpy(test_frame + sizeof(struct nrf_wifi_fmac_rawpkt_info),
+				&test_beacon_frame, sizeof(test_beacon_frame));
+
+	ret = sendto(sockfd, test_frame, buf_length, 0,
+			(struct sockaddr *)&sa, sizeof(sa));
+	if (ret < 0) {
+		LOG_ERR("Unable to send beacon frame: %s", strerror(errno));
+		close(sockfd);
+		free(test_frame);
+		return;
+	}
+
+	/* close the socket */
+	close(sockfd);
+	free(test_frame);
+}
+
 int main(void)
 {
 	memset(&context, 0, sizeof(context));
@@ -337,6 +480,7 @@ int main(void)
 		}
 
 		if (context.connected) {
+			wifi_send_raw_tx_packet();
 			k_sleep(K_FOREVER);
 		} else if (!context.connect_result) {
 			LOG_ERR("Connection Timed Out");
@@ -344,6 +488,7 @@ int main(void)
 	}
 #else
 	wifi_set_channel();
+	wifi_send_raw_tx_packet();
 #endif
 
 	return 0;
