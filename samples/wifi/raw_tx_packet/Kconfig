@@ -47,5 +47,19 @@ config RAW_TX_PACKET_SAMPLE_PASSWORD
        help
          Specify the Password to connect
 
+choice RAW_TX_PACKET_SAMPLE_OPERATION_MODE
+	prompt "Choose Wi-Fi operation mode"
+
+config RAW_TX_PACKET_SAMPLE_CONNECTION_MODE
+	bool "Connection mode"
+	help
+	  Enable this to select Wi-Fi connection mode.
+
+config RAW_TX_PACKET_SAMPLE_IDLE_MODE
+	bool "IDLE mode"
+	help
+	  Enable this to select Wi-Fi IDLE mode.
+endchoice
+
 endmenu
 
