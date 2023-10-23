@@ -403,13 +403,29 @@ static void fill_raw_tx_pkt_hdr(struct nrf_wifi_fmac_rawpkt_info *raw_tx_pkt)
 	raw_tx_pkt->reserved = 0;
 }
 
+static int print_pkt_count_info(int *num_tx_pkts)
+{
+#if defined(CONFIG_RAW_TX_PACKET_SAMPLE_FIXED_NUM_PACKETS)
+	*num_tx_pkts = CONFIG_RAW_TX_PACKET_SAMPLE_FIXED_NUM_PACKETS;
+	if (*num_tx_pkts == 0) {
+		LOG_ERR("Can't send %d number of raw tx packets", *num_tx_pkts);
+		return -1;
+	}
+	LOG_INF("Sending %d number of raw tx packets", *num_tx_pkts);
+#else
+	*num_tx_pkts = -1;
+	LOG_INF("Sending raw tx packets continuously");
+#endif
+	return 0;
+}
+
 static void wifi_send_raw_tx_packet(void)
 {
 	struct sockaddr_ll sa;
 	int sockfd, ret;
 	struct nrf_wifi_fmac_rawpkt_info packet;
 	char *test_frame = NULL;
-	int buf_length;
+	int buf_length, num_pkts;
 
 	ret = setup_raw_pkt_socket(&sockfd, &sa);
 	if (ret < 0) {
@@ -418,6 +434,12 @@ static void wifi_send_raw_tx_packet(void)
 	}
 
 	fill_raw_tx_pkt_hdr(&packet);
+
+	ret = print_pkt_count_info(&num_pkts);
+	if (ret < 0) {
+		close(sockfd);
+		return;
+	}
 
 	test_frame = malloc(sizeof(struct nrf_wifi_fmac_rawpkt_info) + sizeof(test_beacon_frame));
 	if (!test_frame) {
@@ -430,13 +452,25 @@ static void wifi_send_raw_tx_packet(void)
 	memcpy(test_frame + sizeof(struct nrf_wifi_fmac_rawpkt_info),
 				&test_beacon_frame, sizeof(test_beacon_frame));
 
-	ret = sendto(sockfd, test_frame, buf_length, 0,
-			(struct sockaddr *)&sa, sizeof(sa));
-	if (ret < 0) {
-		LOG_ERR("Unable to send beacon frame: %s", strerror(errno));
-		close(sockfd);
-		free(test_frame);
-		return;
+	while (1) {
+		if (CONFIG_RAW_TX_PACKET_SAMPLE_PACKET_TRANSMISSION_MODE == 1 && num_pkts == 0) {
+			break;
+		}
+
+		ret = sendto(sockfd, test_frame, buf_length, 0,
+				(struct sockaddr *)&sa, sizeof(sa));
+		if (ret < 0) {
+			LOG_ERR("Unable to send beacon frame: %s", strerror(errno));
+			close(sockfd);
+			free(test_frame);
+			return;
+		}
+
+		if (CONFIG_RAW_TX_PACKET_SAMPLE_PACKET_TRANSMISSION_MODE == 1 && num_pkts > 0) {
+			num_pkts--;
+		}
+
+		k_msleep(CONFIG_RAW_TX_PACKET_SAMPLE_INTER_FRAME_DELAY_MS);
 	}
 
 	/* close the socket */
