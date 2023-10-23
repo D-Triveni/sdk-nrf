@@ -347,7 +347,7 @@ static void wifi_send_raw_tx_packet(void)
 	struct net_if *iface;
 	struct nrf_wifi_fmac_rawpkt_info raw_tx_pkt;
 	char *buffer = NULL;
-	int buf_length;
+	int buf_length, transmission_mode, num_frames;
 
 	/* Create a raw socket */
 	sockfd = socket(AF_PACKET, SOCK_RAW, IPPROTO_RAW);
@@ -392,13 +392,41 @@ static void wifi_send_raw_tx_packet(void)
 
 	memcpy(buffer + sizeof(struct nrf_wifi_fmac_rawpkt_info), beacon_frame, sizeof(beacon_frame));
 
-	ret = sendto(sockfd, buffer, buf_length, 0,
-			(struct sockaddr *)&sa, sizeof(sa));
-	if (ret < 0) {
-		LOG_ERR("Unable to send beacon frame");
+	transmission_mode = CONFIG_RAW_TX_PACKET_SAMPLE_PACKET_TRANSMISSION_MODE;
+
+#if defined(CONFIG_RAW_TX_PACKET_SAMPLE_FIXED_NUM_PACKETS)
+	num_frames = CONFIG_RAW_TX_PACKET_SAMPLE_FIXED_NUM_PACKETS;
+	if (num_frames == 0) {
+		LOG_ERR("Can't send %d number of raw tx packets", num_frames);
 		close(sockfd);
 		free(buffer);
 		return;
+	} else {
+		LOG_INF("Sending %d number of raw tx packets", num_frames);
+	}
+#else
+	num_frames = -1;
+	LOG_INF("Sending raw tx packets continuously");
+#endif
+	while (1) {
+		if (transmission_mode == 1 && num_frames == 0) {
+				break;
+		}
+
+		ret = sendto(sockfd, buffer, buf_length, 0,
+				(struct sockaddr *)&sa, sizeof(sa));
+		if (ret < 0) {
+			LOG_ERR("Unable to send beacon frame");
+			close(sockfd);
+			free(buffer);
+			return;
+		}
+
+		if (transmission_mode == 1 && num_frames > 0) {
+				num_frames --;
+		}
+
+		k_sleep(K_MSEC(CONFIG_RAW_TX_PACKET_SAMPLE_INTER_FRAME_DELAY_MS));
 	}
 
 	/* close the socket */

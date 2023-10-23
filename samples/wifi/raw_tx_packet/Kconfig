@@ -101,5 +101,25 @@ config RAW_TX_PACKET_SAMPLE_QUEUE_NUM
 	  3 - Voice
 	  4 - Beacon.
 
+config RAW_TX_PACKET_SAMPLE_PACKET_TRANSMISSION_MODE
+	int "Packet Transmission Mode"
+	default 0
+	help
+	  Select the packet transmission mode:
+	  0 - Continuous Mode
+	  1 - Fixed Number of Packets Mode.
+
+config RAW_TX_PACKET_SAMPLE_FIXED_NUM_PACKETS
+	int "Number of Packets"
+	depends on RAW_TX_PACKET_SAMPLE_PACKET_TRANSMISSION_MODE != 0
+	help
+	  Set the number of packets to be sent when using Fixed Number of Packets Mode.
+
+config RAW_TX_PACKET_SAMPLE_INTER_FRAME_DELAY_MS
+	int "Inter-Frame Delay (microseconds)"
+	default 100
+	help
+	  Set the inter-frame delay duration for raw tx packet transmission.
+
 endmenu
 
