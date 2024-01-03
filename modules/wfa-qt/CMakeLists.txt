@@ -10,7 +10,9 @@ endif()
 
 zephyr_library()
 
-set(SOURCES_BASE ${CMAKE_CURRENT_SOURCE_DIR}/../)
+set(WFA_QT_BASE ${CMAKE_CURRENT_SOURCE_DIR}/../../../modules/lib/wfa-qt-control-app)
+set(SOURCES_BASE ${CMAKE_CURRENT_SOURCE_DIR}/)
+
 # Enable of same options as upstream points to issues with Zephyr
 # headers, so, for now, we disable them.
 zephyr_library_compile_options(
@@ -26,18 +28,18 @@ zephyr_library_compile_definitions(
 zephyr_library_compile_definitions(CONFIG_CTRL_IFACE_ZEPHYR)
 
 zephyr_include_directories(
-	${SOURCES_BASE}
-	${SOURCES_BASE}/zephyr/include
+	${WFA_QT_BASE}
+	#	${SOURCES_BASE}/zephyr/include
 )
 
 zephyr_library_sources(
 	# Zephyr's port of the Indigo API
-	${SOURCES_BASE}/zephyr/src/main.c
-	${SOURCES_BASE}/zephyr/src/indigo_api_callback_dut.c
-	${SOURCES_BASE}/zephyr/src/vendor_specific_dut.c
-	${SOURCES_BASE}/zephyr/src/utils.c
-	${SOURCES_BASE}/eloop.c
-	${SOURCES_BASE}/indigo_api.c
-	${SOURCES_BASE}/indigo_packet.c
-	${SOURCES_BASE}/qt_client.c
+	${SOURCES_BASE}/src/main.c
+	${SOURCES_BASE}/src/indigo_api_callback_dut.c
+	${SOURCES_BASE}/src/vendor_specific_dut.c
+	${SOURCES_BASE}/src/utils.c
+	${WFA_QT_BASE}/eloop.c
+	${WFA_QT_BASE}/indigo_api.c
+	${WFA_QT_BASE}/indigo_packet.c
+	${WFA_QT_BASE}/qt_client.c
 )
