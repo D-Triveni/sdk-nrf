@@ -157,7 +157,41 @@ static int setup_raw_pkt_socket(int *sockfd, struct sockaddr_ll *sa)
 	return 0;
 }
 
-static void fill_raw_tx_pkt_hdr(struct raw_tx_pkt_header *raw_tx_pkt)
+int validate(int value, int min, int max, const char *param)
+{
+	if (value < min || value > max) {
+		LOG_ERR("Please provide %s value between %d and %d", param, min, max);
+		return -1;
+	}
+
+	return 0;
+}
+
+int validate_rate(int data_rate, int flag)
+{
+	if ((flag == 0) && ((data_rate == 1) ||
+			   (data_rate == 2) ||
+			   (data_rate == 55) ||
+			   (data_rate == 11) ||
+			   (data_rate == 6) ||
+			   (data_rate == 9) ||
+			   (data_rate == 12) ||
+			   (data_rate == 18) ||
+			   (data_rate == 24) ||
+			   (data_rate == 36) ||
+			   (data_rate == 48) ||
+			   (data_rate == 54))) {
+
+		return 0;
+	} else if (((flag >= 1 && flag <= 4)) && ((data_rate >= 0) && (data_rate <= 7))) {
+		return 0;
+	}
+
+	LOG_ERR("Invalid Data rate");
+	return -1;
+}
+
+static int fill_raw_tx_pkt_hdr(struct raw_tx_pkt_header *raw_tx_pkt)
 {
 	/* Raw Tx Packet header */
 	raw_tx_pkt->magic_num = NRF_WIFI_MAGIC_NUM_RAWTX;
@@ -167,6 +201,21 @@ static void fill_raw_tx_pkt_hdr(struct raw_tx_pkt_header *raw_tx_pkt)
 	raw_tx_pkt->queue = CONFIG_RAW_TX_PACKET_SAMPLE_QUEUE_NUM;
 	/* The byte is reserved and used by the driver */
 	raw_tx_pkt->raw_tx_flag = 0;
+
+	if (validate(CONFIG_RAW_TX_PACKET_SAMPLE_RATE_FLAGS, 0, 4, "Rate Flags")) {
+		return -1;
+	}
+
+	if (validate_rate(CONFIG_RAW_TX_PACKET_SAMPLE_RATE_FLAGS,
+			  CONFIG_RAW_TX_PACKET_SAMPLE_RATE_VALUE)) {
+		return -1;
+	}
+
+	if (validate(CONFIG_RAW_TX_PACKET_SAMPLE_QUEUE_NUM, 0, 4, "Queue Number")) {
+		return -1;
+	}
+
+	return 0;
 }
 
 int wifi_send_raw_tx_pkt(int sockfd, char *test_frame,
@@ -219,7 +268,9 @@ static void wifi_send_raw_tx_packets(void)
 		return;
 	}
 
-	fill_raw_tx_pkt_hdr(&packet);
+	if (fill_raw_tx_pkt_hdr(&packet)) {
+		return;
+	}
 
 	ret = get_pkt_transmit_count(&transmission_mode, &num_pkts);
 	if (ret < 0) {
