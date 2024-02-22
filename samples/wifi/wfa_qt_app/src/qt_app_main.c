@@ -33,9 +33,12 @@ int init_usb(void)
 }
 #endif /* CONFIG_USB_DEVICE_STACK */
 
+int check_events(void);
+
 int main(void)
 {
 	struct in_addr addr;
+	int ret;
 
 #if defined(CLOCK_FEATURE_HFCLK_DIVIDE_PRESENT) || NRF_CLOCK_HAS_HFCLK192M
 	/* For now hardcode to 128MHz */
@@ -133,6 +136,10 @@ int main(void)
 
 	net_config_init_app(dev, "Initializing network");
 #endif
+	ret = wpa_supp_events_init();
+	if (ret) {
+		return -1;
+	}
 
 	return 0;
 }
