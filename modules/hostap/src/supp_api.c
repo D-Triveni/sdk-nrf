@@ -778,6 +778,20 @@ int z_wpa_supplicant_channel(const struct device *dev,
 	return wifi_mgmt_api->channel(dev, channel);
 }
 
+int z_wpa_supplicant_test(const struct device *dev, char *str)
+{
+	wpa_printf(MSG_INFO, "Entered supplicant");
+	const struct wifi_mgmt_ops *const wifi_mgmt_api = get_wifi_mgmt_api(dev);
+
+	if (!wifi_mgmt_api || !wifi_mgmt_api->print_test) {
+		wpa_printf(MSG_ERROR, "Test api not supported");
+		return -ENOTSUP;
+	}
+
+	wpa_printf(MSG_INFO, "Calling Driver");
+	return wifi_mgmt_api->print_test(dev, str);
+}
+
 #ifdef CONFIG_AP
 int z_wpa_supplicant_ap_enable(const struct device *dev,
 			       struct wifi_connect_req_params *params)

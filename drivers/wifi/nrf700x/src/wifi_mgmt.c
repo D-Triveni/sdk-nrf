@@ -948,3 +948,10 @@ out:
 	return ret;
 }
 #endif /* CONFIG_NRF700X_RAW_DATA_RX || CONFIG_NRF700X_PROMISC_DATA_RX */
+
+int nrf_wifi_test(const struct device *dev,
+		  char *str)
+{
+	LOG_INF("%s Driver", str);
+	return 0;
+}

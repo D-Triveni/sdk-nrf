@@ -88,6 +88,7 @@ static const struct wifi_mgmt_ops wpa_supp_ops = {
 	.ap_disable = z_wpa_supplicant_ap_disable,
 	.ap_sta_disconnect = z_wpa_supplicant_ap_sta_disconnect,
 #endif /* CONFIG_AP */
+	.print_test = z_wpa_supplicant_test,
 };
 
 DEFINE_WIFI_NM_INSTANCE(wpa_supplicant, &wpa_supp_ops);

@@ -796,6 +796,7 @@ static struct wifi_mgmt_ops nrf_wifi_mgmt_ops = {
 #if defined(CONFIG_NRF700X_RAW_DATA_RX) || defined(CONFIG_NRF700X_PROMISC_DATA_RX)
 	.filter = nrf_wifi_filter,
 #endif /* CONFIG_NRF700X_RAW_DATA_RX || CONFIG_NRF700X_PROMISC_DATA_RX */
+	.print_test = nrf_wifi_test,
 };
 #endif /* CONFIG_NET_L2_WIFI_MGMT */
 

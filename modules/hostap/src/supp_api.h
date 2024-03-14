@@ -168,4 +168,6 @@ int z_wpa_supplicant_ap_disable(const struct device *dev);
 int z_wpa_supplicant_ap_sta_disconnect(const struct device *dev,
 				       const uint8_t *mac_addr);
 #endif /* CONFIG_AP */
+int z_wpa_supplicant_test(const struct device *dev,
+			  char *str);
 #endif /* ZEPHYR_SUPP_MGMT_H */
