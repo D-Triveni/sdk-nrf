@@ -18,6 +18,7 @@ LOG_MODULE_REGISTER(softap, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define WIFI_SAP_MGMT_EVENTS (NET_EVENT_WIFI_AP_ENABLE_RESULT)
 
+int wait_for_wpa_s_ready(void);
 static struct net_mgmt_event_callback wifi_sap_mgmt_cb;
 
 static K_MUTEX_DEFINE(wifi_ap_sta_list_lock);
@@ -239,6 +240,11 @@ static int wifi_softap_enable(void)
 	if (!iface) {
 		LOG_ERR("Failed to get Wi-Fi iface");
 		goto out;
+	}
+
+	ret = wait_for_wpa_s_ready();
+	if (ret < 0) {
+		LOG_ERR("Failed to wait for WPA supplicant to be ready");
 	}
 
 	if (__wifi_args_to_params(&cnx_params)) {
