@@ -17,7 +17,10 @@ LOG_MODULE_REGISTER(softap, CONFIG_LOG_DEFAULT_LEVEL);
 #include <zephyr/net/dhcpv4_server.h>
 
 #define WIFI_SAP_MGMT_EVENTS (NET_EVENT_WIFI_AP_ENABLE_RESULT)
-
+void wifi_softap_init(struct k_work *work);
+K_WORK_DEFINE(sap_init_work, wifi_softap_init);
+bool sap_init_scheduled = false;
+int wpa_supp_events_register(void);
 int wait_for_wpa_s_ready(void);
 static struct net_mgmt_event_callback wifi_sap_mgmt_cb;
 
@@ -188,7 +191,7 @@ static int __wifi_args_to_params(struct wifi_connect_req_params *params)
 	return 0;
 }
 
-static void cmd_wifi_status(void)
+void cmd_wifi_status(void)
 {
 	struct net_if *iface;
 	struct wifi_iface_status status = { 0 };
@@ -240,11 +243,6 @@ static int wifi_softap_enable(void)
 	if (!iface) {
 		LOG_ERR("Failed to get Wi-Fi iface");
 		goto out;
-	}
-
-	ret = wait_for_wpa_s_ready();
-	if (ret < 0) {
-		LOG_ERR("Failed to wait for WPA supplicant to be ready");
 	}
 
 	if (__wifi_args_to_params(&cnx_params)) {
@@ -331,9 +329,26 @@ out:
 		ret = func(__VA_ARGS__); \
 		if (ret) { \
 			LOG_ERR("Failed to configure %s", #func); \
-			return -1; \
+			return; \
 		} \
 	} while (0)
+
+
+void wifi_softap_init(struct k_work *work)
+{
+	int ret;
+
+
+	CHECK_RET(wifi_set_reg_domain);
+
+	CHECK_RET(configure_dhcp_server);
+
+	CHECK_RET(wifi_softap_enable);
+
+	cmd_wifi_status();
+
+	return;
+}
 
 int main(void)
 {
@@ -345,13 +360,21 @@ int main(void)
 
 	net_mgmt_add_event_callback(&wifi_sap_mgmt_cb);
 
-	CHECK_RET(wifi_set_reg_domain);
 
-	CHECK_RET(configure_dhcp_server);
+	ret = wpa_supp_events_register();
+	if (ret < 0) {
+		LOG_ERR("Failed to register WPA supplicant events");
+	}
 
-	CHECK_RET(wifi_softap_enable);
+	ret = wait_for_wpa_s_ready();
+	if (ret < 0) {
+		LOG_ERR("Failed to wait for WPA supplicant to be ready");
+	}
 
-	cmd_wifi_status();
+	if (ret == 0 && !sap_init_scheduled) {
+		k_work_submit(&sap_init_work);
+		sap_init_scheduled = true;
+	}
 
 	return 0;
 }

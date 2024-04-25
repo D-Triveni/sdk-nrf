@@ -12,6 +12,9 @@
 #include <zephyr/kernel.h>
 LOG_MODULE_REGISTER(wpas_event, CONFIG_LOG_DEFAULT_LEVEL);
 
+#define WPAS_READY_TIMEOUT_MS 200
+#define WLAN_SAP_INTERFACE "nordic_wlan0"
+
 /* TODO: Handle other events */
 #define WPA_SUPP_EVENTS (NET_EVENT_WPA_SUPP_READY)
 
@@ -19,9 +22,16 @@ static struct net_mgmt_event_callback net_wpa_supp_cb;
 
 K_SEM_DEFINE(wpa_supp_ready_sem, 0, 1);
 
+extern struct k_work sap_init_work;
+extern bool sap_init_scheduled;
+
 static void handle_wpa_supp_ready(struct net_mgmt_event_callback *cb)
 {
 	k_sem_give(&wpa_supp_ready_sem);
+	if (!sap_init_scheduled) {
+		k_work_submit(&sap_init_work);
+		sap_init_scheduled = true;
+	}
 }
 
 static void wpa_supp_event_handler(struct net_mgmt_event_callback *cb,
@@ -40,29 +50,37 @@ static void wpa_supp_event_handler(struct net_mgmt_event_callback *cb,
 
 int wait_for_wpa_s_ready(void)
 {
-	struct wpa_supplicant *wpa_s = z_wpas_get_handle_by_ifname("nordic_wlan0");
+	const struct device *dev = NULL;
+	struct wpa_supplicant *wpa_s;
 	int ret;
 
+	dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_wifi));
+	if (!dev) {
+		wpa_printf(MSG_ERROR, "Device instance not found");
+		return;
+	}
+
+	wpa_s = z_wpas_get_handle_by_ifname(dev->name);
 	if (wpa_s) {
-		LOG_INF("WPA Supplicant is already ready: %s", "nordic_wlan0");
+		LOG_INF("WPA Supplicant is already ready: %s", dev->name);
 		return 0;
 	}
 
-	ret = k_sem_take(&wpa_supp_ready_sem, K_MSEC(CONFIG_WPAS_READY_TIMEOUT_MS));
+	ret = k_sem_take(&wpa_supp_ready_sem, K_MSEC(WPAS_READY_TIMEOUT_MS));
 	if (ret == -EAGAIN) {
 		LOG_INF("Timeout waiting for WPA Supplicant to be ready (%d ms)",
-			CONFIG_WPAS_READY_TIMEOUT_MS);
+			WPAS_READY_TIMEOUT_MS);
 		return -1;
 	}
 
-	wpa_s = z_wpas_get_handle_by_ifname("nordic_wlan0");
+	wpa_s = z_wpas_get_handle_by_ifname(WLAN_SAP_INTERFACE);
 	if (!wpa_s) {
 		LOG_INF("WPA Supplicant ready event received, but no handle found for %s",
-			 "nordic_wlan0");
+			 WLAN_SAP_INTERFACE);
 		return -1;
 	}
 
-	LOG_INF("WPA Supplicant is ready: %s", "nordic_wlan0");
+	LOG_INF("WPA Supplicant is ready: %s", WLAN_SAP_INTERFACE);
 
 	return 0;
 }
