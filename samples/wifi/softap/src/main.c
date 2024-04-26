@@ -338,6 +338,10 @@ void wifi_softap_init(struct k_work *work)
 {
 	int ret;
 
+	ret = wait_for_wpa_s_ready();
+	if (ret < 0) {
+		LOG_ERR("Failed to wait for WPA supplicant to be ready");
+	}
 
 	CHECK_RET(wifi_set_reg_domain);
 
@@ -364,16 +368,6 @@ int main(void)
 	ret = wpa_supp_events_register();
 	if (ret < 0) {
 		LOG_ERR("Failed to register WPA supplicant events");
-	}
-
-	ret = wait_for_wpa_s_ready();
-	if (ret < 0) {
-		LOG_ERR("Failed to wait for WPA supplicant to be ready");
-	}
-
-	if (ret == 0 && !sap_init_scheduled) {
-		k_work_submit(&sap_init_work);
-		sap_init_scheduled = true;
 	}
 
 	return 0;

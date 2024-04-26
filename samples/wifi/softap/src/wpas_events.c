@@ -28,10 +28,7 @@ extern bool sap_init_scheduled;
 static void handle_wpa_supp_ready(struct net_mgmt_event_callback *cb)
 {
 	k_sem_give(&wpa_supp_ready_sem);
-	if (!sap_init_scheduled) {
-		k_work_submit(&sap_init_work);
-		sap_init_scheduled = true;
-	}
+	k_work_submit(&sap_init_work);
 }
 
 static void wpa_supp_event_handler(struct net_mgmt_event_callback *cb,
