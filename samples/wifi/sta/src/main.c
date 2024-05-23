@@ -25,6 +25,7 @@ LOG_MODULE_REGISTER(sta, CONFIG_LOG_DEFAULT_LEVEL);
 #include <zephyr/drivers/gpio.h>
 
 #include <net/wifi_mgmt_ext.h>
+#include <net/library.h>
 
 #include <qspi_if.h>
 
@@ -216,6 +217,7 @@ static int wifi_connect(void)
 	context.connected = false;
 	context.connect_result = false;
 
+	LOG_INF("%s called", __func__);
 	if (net_mgmt(NET_REQUEST_WIFI_CONNECT_STORED, iface, NULL, 0)) {
 		LOG_ERR("Connection request failed");
 
@@ -247,7 +249,12 @@ int bytes_from_str(const char *str, uint8_t *bytes, size_t bytes_len)
 	return 0;
 }
 
-int main(void)
+int stop_app(void)
+{
+	return -1;
+}
+
+int start_app(void)
 {
 	memset(&context, 0, sizeof(context));
 
@@ -304,16 +311,32 @@ int main(void)
 	while (1) {
 		wifi_connect();
 
-		while (!context.connect_result) {
+/*		while (!context.connect_result) {
 			cmd_wifi_status();
 			k_sleep(K_MSEC(STATUS_POLLING_MS));
 		}
-
+*/
 		if (context.connected) {
 			cmd_wifi_status();
 			k_sleep(K_FOREVER);
 		}
 	}
+
+	return 0;
+}
+
+int main(void)
+{
+	app_callbacks_t callbacks = {
+		.start_app = start_app,
+		.stop_app = stop_app
+	};
+
+	LOG_INF("App Main thread started");
+
+	register_events(callbacks);
+
+	LOG_INF("App Main thread exited");
 
 	return 0;
 }

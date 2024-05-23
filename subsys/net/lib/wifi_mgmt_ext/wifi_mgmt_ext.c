@@ -133,6 +133,7 @@ static int add_network_from_credentials_struct_personal(struct wifi_credentials_
 	int ret = 0;
 	struct wifi_connect_req_params cnx_params = {0};
 
+	LOG_INF("%s called", __func__);
 	if (__stored_creds_to_params(creds, &cnx_params)) {
 		ret = -ENOEXEC;
 		goto out;
@@ -180,6 +181,7 @@ static int add_static_network_config(struct net_if *iface)
 {
 #if defined(CONFIG_WIFI_CREDENTIALS_STATIC)
 
+	LOG_INF("%s called", __func__);
 	struct wifi_credentials_personal creds = {
 		.header = {
 			.ssid_len = strlen(CONFIG_WIFI_CREDENTIALS_STATIC_SSID),
@@ -231,6 +233,7 @@ static int wifi_ext_command(uint32_t mgmt_request, struct net_if *iface,
 {
 	int ret = 0;
 
+	LOG_INF("%s called", __func__);
 	ret = add_static_network_config(iface);
 	if (ret) {
 		return ret;

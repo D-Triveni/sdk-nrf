@@ -23,6 +23,7 @@ LOG_MODULE_REGISTER(raw_tx_packet, CONFIG_LOG_DEFAULT_LEVEL);
 
 #include "net_private.h"
 #include "wifi_connection.h"
+#include <net/library.h>
 
 #define BEACON_PAYLOAD_LENGTH 256
 #define CONTINUOUS_MODE_TRANSMISSION 0
@@ -300,7 +301,7 @@ static void wifi_send_raw_tx_packets(void)
 	free(test_frame);
 }
 
-int main(void)
+int start_app(void)
 {
 	int mode;
 
@@ -325,6 +326,24 @@ int main(void)
 	wifi_set_channel();
 #endif
 	wifi_send_raw_tx_packets();
+
+	return 0;
+}
+
+int stop_app(void) {
+	LOG_ERR("Wi-Fi is not operational, so exiting the Application.");
+	return 0;
+}
+
+int main() {
+	app_callbacks_t callbacks = {
+		.start_app = start_app,
+		.stop_app = stop_app
+	};
+	// Register events with the library and provide callback to start the app
+	register_events(callbacks);
+	// Application main thread exits after registering events
+	LOG_INF("Application main thread exited");
 
 	return 0;
 }
