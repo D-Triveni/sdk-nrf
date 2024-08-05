@@ -155,9 +155,9 @@ manifest:
       repo-path: sdk-oberon-psa-crypto
       revision: 61ce2eed8bfe94bfd1547b27f01885ec1486847c
     - name: nrfxlib
-      repo-path: sdk-nrfxlib
+      url: https://github.com/D-Triveni/sdk-nrfxlib
       path: nrfxlib
-      revision: 51fc239e2b677bcadb720eb7af9efc98553feb4e
+      revision: fix_multicast_rx_issue
     - name: trusted-firmware-m
       repo-path: sdk-trusted-firmware-m
       path: modules/tee/tf-m/trusted-firmware-m
