@@ -166,7 +166,7 @@ After programming, the sample shows the following output:
    [00:00:00.835,327] <inf> usb_ecm: Set Interface 0 Packet Filter 0x000e not supported
    [00:00:00.835,937] <inf> usb_ecm: Set Interface 0 Packet Filter 0x000e not supported
 
-QuickTrack certification testing
+Q-Track certification testing
 ********************************
 
 QuickTrack certification tests can be done by individual companies with Wi-Fi Alliance membership or by authorized test houses.
