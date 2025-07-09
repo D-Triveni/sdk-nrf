@@ -1817,6 +1817,125 @@ static void append_wpas_network_default_config(struct packet_wrapper *wrapper)
 }
 #endif /* _RESERVED_ */
 
+#ifdef CONFIG_WIFI_NM_WPA_SUPPLICANT_CRYPTO_ENTERPRISE
+
+#include <zephyr/net/wifi_mgmt.h>
+
+int wpas_config_process_blob(struct wpa_config *config, char *name, uint8_t *data,
+                                uint32_t data_len);
+struct wifi_enterprise_creds_params params;
+
+static const char ca_cert_test[] = {
+       #include <wifi_enterprise_test_certs/ca.pem.inc>
+       '\0'
+};
+
+static const char client_cert_test[] = {
+       #include <wifi_enterprise_test_certs/client.pem.inc>
+       '\0'
+};
+
+static const char client_key_test[] = {
+       #include <wifi_enterprise_test_certs/client-key.pem.inc>
+       '\0'
+};
+
+static const char ca_cert2_test[] = {
+       #include <wifi_enterprise_test_certs/ca2.pem.inc>
+       '\0'};
+
+static const char client_cert2_test[] = {
+       #include <wifi_enterprise_test_certs/client2.pem.inc>
+       '\0'};
+
+static const char client_key2_test[] = {
+       #include <wifi_enterprise_test_certs/client-key2.pem.inc>
+       '\0'};
+
+static const char server_cert_test[] = {
+       #include <wifi_enterprise_test_certs/server.pem.inc>
+       '\0'
+};
+
+static const char server_key_test[] = {
+       #include <wifi_enterprise_test_certs/server-key.pem.inc>
+       '\0'
+};
+
+static void set_enterprise_creds_params(bool is_ap)
+{
+	memset(&params, 0, sizeof(struct wifi_enterprise_creds_params));
+	params.ca_cert = (uint8_t *)ca_cert_test;
+	params.ca_cert_len = ARRAY_SIZE(ca_cert_test);
+
+	if (!is_ap) {
+		params.client_cert = (uint8_t *)client_cert_test;
+		params.client_cert_len = ARRAY_SIZE(client_cert_test);
+		params.client_key = (uint8_t *)client_key_test;
+		params.client_key_len = ARRAY_SIZE(client_key_test);
+		params.ca_cert2 = (uint8_t *)ca_cert2_test;
+		params.ca_cert2_len = ARRAY_SIZE(ca_cert2_test);
+		params.client_cert2 = (uint8_t *)client_cert2_test;
+		params.client_cert2_len = ARRAY_SIZE(client_cert2_test);
+		params.client_key2 = (uint8_t *)client_key2_test;
+		params.client_key2_len = ARRAY_SIZE(client_key2_test);
+
+		return;
+	}
+
+	params.server_cert = (uint8_t *)server_cert_test;
+	params.server_cert_len = ARRAY_SIZE(server_cert_test);
+	params.server_key = (uint8_t *)server_key_test;
+	params.server_key_len = ARRAY_SIZE(server_key_test);
+}
+
+static int wifi_set_enterprise_creds(void)
+{
+	struct net_if *iface = net_if_get_first_wifi();
+
+	set_enterprise_creds_params(0);
+	if (net_mgmt(NET_REQUEST_WIFI_ENTERPRISE_CREDS, iface, &params, sizeof(params))) {
+		printf("Set enterprise credentials failed\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+static int process_certificates(void)
+{
+	struct wpa_supplicant *wpa_s;
+
+	wpa_s = zephyr_get_handle_by_ifname(CONFIG_WFA_QT_DEFAULT_INTERFACE);
+	if (!wpa_s) {
+		printf("Unable to find the interface: %s, quitting", CONFIG_WFA_QT_DEFAULT_INTERFACE);
+		return -1;
+	}
+
+	wifi_set_enterprise_creds();
+
+	if (wpas_config_process_blob(wpa_s->conf, "ca_cert",
+					params.ca_cert,
+					params.ca_cert_len)) {
+		return -1;
+	}
+
+	if (wpas_config_process_blob(wpa_s->conf, "client_cert",
+					params.client_cert,
+					params.client_cert_len)) {
+		return -1;
+	}
+
+	if (wpas_config_process_blob(wpa_s->conf, "private_key",
+					params.client_key,
+					params.client_key_len)) {
+		return -1;
+	}
+
+	return 0;
+}
+#endif
+
 static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapper *resp)
 {
 	char buffer[128];
@@ -1849,6 +1968,7 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
 		memset(buffer, 0, sizeof(buffer));
 		CHECK_SNPRINTF(buffer, sizeof(buffer), ret,
 			       "SET_NETWORK 0 key_mgmt %s", tlv->value);
+		printf("NORDIC: %s -%d value:%s\n", __func__, __LINE__, tlv->value);
 		ret = run_qt_command(buffer);
 		CHECK_RET();
 
@@ -1866,6 +1986,60 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
 			ret = run_qt_command(buffer);
 			CHECK_RET();
 			ret = run_qt_command("SET_NETWORK 0 ieee80211w 2");
+			CHECK_RET();
+		} else if (strstr(tlv->value, "WPA-EAP")) {
+
+			/*
+			 * Process Certificates
+			 */
+
+			process_certificates();
+
+			tlv = find_wrapper_tlv_by_id(req, TLV_EAP);
+			if (tlv) {
+				memset(buffer, 0, sizeof(buffer));
+				CHECK_SNPRINTF(buffer, sizeof(buffer),
+						ret, "SET_NETWORK 0 eap %s", tlv->value);
+				ret = run_qt_command(buffer);
+				CHECK_RET();
+			}
+			tlv = find_wrapper_tlv_by_id(req, TLV_IDENTITY);
+			if (tlv) {
+				memset(buffer, 0, sizeof(buffer));
+				CHECK_SNPRINTF(buffer, sizeof(buffer),
+						ret, "SET_NETWORK 0 identity \"%s\"", tlv->value);
+				ret = run_qt_command(buffer);
+				CHECK_RET();
+			}
+			tlv = find_wrapper_tlv_by_id(req, TLV_CA_CERT);
+			if (tlv) {
+				memset(buffer, 0, sizeof(buffer));
+				CHECK_SNPRINTF(buffer, sizeof(buffer),
+						ret, "SET_NETWORK 0 ca_cert \"%s\"", "blob://ca_cert");
+				ret = run_qt_command(buffer);
+				CHECK_RET();
+			}
+			tlv = find_wrapper_tlv_by_id(req, TLV_CLIENT_CERT);
+			if (tlv) {
+				memset(buffer, 0, sizeof(buffer));
+				CHECK_SNPRINTF(buffer, sizeof(buffer),
+						ret, "SET_NETWORK 0 client_cert \"%s\"", "blob://client_cert");
+				ret = run_qt_command(buffer);
+				CHECK_RET();
+			}
+			tlv = find_wrapper_tlv_by_id(req, TLV_PRIVATE_KEY);
+			if (tlv) {
+				memset(buffer, 0, sizeof(buffer));
+				CHECK_SNPRINTF(buffer, sizeof(buffer),
+						ret, "SET_NETWORK 0 private_key \"%s\"", "blob://private_key");
+				ret = run_qt_command(buffer);
+				CHECK_RET();
+			}
+			CHECK_SNPRINTF(buffer, sizeof(buffer),
+					ret, "SET_NETWORK 0 private_key_passwd \"whatever\"");
+			ret = run_qt_command(buffer);
+			CHECK_RET();
+			ret = run_qt_command("SET_NETWORK 0 ieee80211w 1");
 			CHECK_RET();
 		}
 	}
