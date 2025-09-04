@@ -47,3 +47,16 @@ tests:
       - ci_build
       - sysbuild
       - ci_samples_wifi
+  sample.54lm20pdk.nrf7002eb2.monitor:
+    sysbuild: true
+    build_only: true
+    extra_args:
+      - monitor_SHIELD="nrf7002eb2"
+    integration_platforms:
+      - nrf54lm20pdk@0.2.0.csp/nrf54lm20a/cpuapp
+    platform_allow:
+      - nrf54lm20pdk@0.2.0.csp/nrf54lm20a/cpuapp
+    tags:
+      - ci_build
+      - sysbuild
+      - ci_samples_wifi
