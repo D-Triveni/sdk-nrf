@@ -1825,7 +1825,7 @@ static void append_wpas_network_default_config(struct packet_wrapper *wrapper)
 
 static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapper *resp)
 {
-	char buffer[128];
+	char buffer[256];
 	struct tlv_hdr *tlv = NULL;
 	int status = TLV_VALUE_STATUS_OK, ret;
 	char *message = "DUT configured as STA";
@@ -1902,6 +1902,27 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
 				{ TLV_PRIVATE_KEY,
 				  "SET_NETWORK 0 private_key \"%s\"",
 				  "blob://private_key", false },
+				{ TLV_PHASE1,
+				  "SET_NETWORK 0 phase1 \"%s\"",
+				  NULL, true },
+				{ TLV_PHASE2,
+				  "SET_NETWORK 0 phase2 \"%s\"",
+				  NULL, true },
+				{ TLV_PASSWORD,
+				  "SET_NETWORK 0 password \"%s\"",
+				  NULL, true },
+				{ TLV_STA_IEEE80211_W,
+				  "SET_NETWORK 0 ieee80211w %s",
+				  NULL, true },
+				{ TLV_DOMAIN_MATCH,
+				  "SET_NETWORK 0 domain_match \"%s\"",
+				  NULL, true },
+				{ TLV_DOMAIN_SUFFIX_MATCH,
+				  "SET_NETWORK 0 domain_suffix_match \"%s\"",
+				  NULL, true },
+				{ TLV_SERVER_CERT,
+				  "SET_NETWORK 0 ca_cert \"%s\"",
+				  NULL, true },
 			};
 
 			for (size_t i = 0; i < ARRAY_SIZE(config_cmds); i++) {
@@ -1924,8 +1945,6 @@ static int configure_sta_handler(struct packet_wrapper *req, struct packet_wrapp
 			CHECK_SNPRINTF(buffer, sizeof(buffer),
 					ret, "SET_NETWORK 0 private_key_passwd \"whatever\"");
 			ret = run_qt_command(buffer);
-			CHECK_RET();
-			ret = run_qt_command("SET_NETWORK 0 ieee80211w 1");
 			CHECK_RET();
 		}
 #else
