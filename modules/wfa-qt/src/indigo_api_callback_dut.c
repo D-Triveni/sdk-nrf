@@ -2116,32 +2116,9 @@ done:
 #ifdef CONFIG_P2P
 static int start_up_p2p_handler(struct packet_wrapper *req, struct packet_wrapper *resp)
 {
-	char *message = TLV_VALUE_WPA_S_START_UP_NOT_OK;
-	char buffer[S_BUFFER_LEN];
-	int len, status = TLV_VALUE_STATUS_NOT_OK, ret;
+	char *message = TLV_VALUE_WPA_S_START_UP_OK;
+	int status = TLV_VALUE_STATUS_OK;
 
-	/* TODO: Add functionality to stop Supplicant */
-
-	/* Generate P2P config file */
-	CHECK_SNPRINTF(buffer, sizeof(buffer), ret,
-		       "ctrl_interface=%s\n", WPAS_CTRL_PATH_DEFAULT);
-	/* Add Device name and Device type */
-	strcat(buffer, "device_name=WFA P2P Device\n");
-	strcat(buffer, "device_type=1-0050F204-1\n");
-	/* Add config methods */
-	strcat(buffer, "config_methods=keypad display push_button\n");
-	len = strlen(buffer);
-
-	if (len) {
-		write_file(get_wpas_conf_file(), buffer, len);
-	}
-
-	/* Start WPA supplicant */
-	/* TODO: Add functionality to start Supplicant */
-
-	status = TLV_VALUE_STATUS_OK;
-	message = TLV_VALUE_WPA_S_START_UP_OK;
-done:
 	fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
 	fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
 	fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
