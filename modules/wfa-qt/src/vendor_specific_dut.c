@@ -109,11 +109,13 @@ wps_setting *__get_wps_setting(int len, char *buffer, enum wps_device_role role)
 
 	return NULL;
 }
+#endif /* End Of CONFIG_WPS */
 
+#ifdef CONFIG_AP
 wps_setting *get_vendor_wps_settings(enum wps_device_role role)
 {
 	/*TODO: Implement this for zephyr */
 
 	return NULL;
 }
-#endif /* End Of CONFIG_WPS */
+#endif /* End Of CONFIG_AP */
