@@ -59,19 +59,19 @@ int get_p2p_mac_addr(char *mac_addr, size_t size)
 {
 	/*TODO: Implement this for zephyr */
 
-	return 0;
+	return 1;
 }
 
 /* Get the name of P2P Group(GO or Client) interface */
 int get_p2p_group_if(char *if_name, size_t size)
 {
-	snprintf(ifname, size, "%s", get_wireless_interface());
-	return 0;
+	snprintf(if_name, size, "%s", get_wireless_interface());
+	return 1;
 }
 
 int get_p2p_dev_if(char *if_name, size_t size)
 {
-	snprintf(ifname, size, "%s", get_wireless_interface());
+	snprintf(if_name, size, "%s", get_wireless_interface());
 	return 0;
 }
 #endif /* End Of CONFIG_P2P */

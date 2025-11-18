@@ -2129,8 +2129,22 @@ done:
 static int start_up_p2p_handler(struct packet_wrapper *req, struct packet_wrapper *resp)
 {
 	char *message = TLV_VALUE_WPA_S_START_UP_OK;
-	int status = TLV_VALUE_STATUS_OK;
+	int ret, status = TLV_VALUE_STATUS_OK;
+	char buffer[256];
 
+	memset(buffer, 0, sizeof(buffer));
+	CHECK_SNPRINTF(buffer, sizeof(buffer), ret, "set device_type 6-0050F204-1");
+	ret = run_qt_command(buffer);
+	CHECK_RET();
+
+	memset(buffer, 0, sizeof(buffer));
+	CHECK_SNPRINTF(buffer, sizeof(buffer), ret, "set device_name 7002DK");
+	ret = run_qt_command(buffer);
+	CHECK_RET();
+
+	indigo_logger(LOG_LEVEL_INFO, "Executing p2p start up");
+
+done:
 	fill_wrapper_message_hdr(resp, API_CMD_RESPONSE, req->hdr.seq);
 	fill_wrapper_tlv_byte(resp, TLV_STATUS, status);
 	fill_wrapper_tlv_bytes(resp, TLV_MESSAGE, strlen(message), message);
@@ -2200,7 +2214,7 @@ static int add_p2p_group_handler(struct packet_wrapper *req, struct packet_wrapp
 	}
 
 	memset(buffer, 0, sizeof(buffer));
-	CHECK_SNPRINTF(buffer, sizeof(buffer), ret, "P2P_GROUP_ADD freq=%s%s", freq, he);
+	CHECK_SNPRINTF(buffer, sizeof(buffer), ret, "P2P_GROUP_ADD freq=%s", freq);
 	ret = run_qt_command(buffer);
 	CHECK_RET();
 
@@ -2277,7 +2291,7 @@ static int p2p_start_wps_handler(struct packet_wrapper *req, struct packet_wrapp
 	CHECK_RET();
 
 	/* Open wpa_supplicant UDS socket */
-	if (get_p2p_group_if(if_name, sizeof(if_name))) {
+	if (!get_p2p_group_if(if_name, sizeof(if_name))) {
 		indigo_logger(LOG_LEVEL_ERROR, "Failed to get P2P group interface");
 		goto done;
 	}
@@ -2457,9 +2471,8 @@ static int p2p_connect_handler(struct packet_wrapper *req, struct packet_wrapper
 		} else {
 			indigo_logger(LOG_LEVEL_ERROR, "Missed TLV WSC_METHOD");
 		}
-		CHECK_SNPRINTF(buffer, sizeof(buffer), ret,
-			       "P2P_CONNECT %s %s%s%s%s%s", mac, method,
-			       type, go_intent, he, persist);
+		CHECK_SNPRINTF(buffer, sizeof(buffer), ret, "P2P_CONNECT %s pbc %s", mac, type);
+		//	       "P2P_CONNECT %s %s%s%s%s%s", mac, method, type, go_intent, he, persist);
 	}
 	indigo_logger(LOG_LEVEL_DEBUG, "Command: %s", buffer);
 
@@ -2725,8 +2738,9 @@ static int start_dhcp_handler(struct packet_wrapper *req, struct packet_wrapper 
 		if (!strcmp("0.0.0.0", ip_addr)) {
 			CHECK_SNPRINTF(ip_addr, sizeof(ip_addr), ret, DHCP_SERVER_IP);
 		}
-		CHECK_SNPRINTF(buffer, sizeof(buffer), ret, "%s/24", ip_addr);
+		CHECK_SNPRINTF(buffer, sizeof(buffer), ret, "%s", ip_addr);
 		set_interface_ip(if_name, buffer);
+		set_netmask(if_name);
 		start_dhcp_server(if_name, ip_addr);
 	} else { /* DHCP Client */
 		start_dhcp_client(if_name);
@@ -2853,29 +2867,8 @@ static int start_wps_ap_handler(struct packet_wrapper *req, struct packet_wrappe
 		memset(pin_code, 0, sizeof(pin_code));
 		memcpy(pin_code, tlv->value, sizeof(pin_code));
 
-		/* Please implement the wsc pin validation function to
-		 * identify the invalid PIN code and DONOT start wps.
-		 */
-		#define WPS_PIN_VALIDATION_FILE "/tmp/pin_checksum.sh"
-		int len = 0;
-		char pipebuf[S_BUFFER_LEN];
-		static const char * const parameter[] = {"sh",
-							 WPS_PIN_VALIDATION_FILE,
-							 pin_code, NULL};
-
-		memset(pipebuf, 0, sizeof(pipebuf));
-		if (access(WPS_PIN_VALIDATION_FILE, F_OK) == 0) {
-			len = pipe_command(pipebuf, sizeof(pipebuf), "/bin/sh", parameter);
-			if (len && atoi(pipebuf)) {
-				indigo_logger(LOG_LEVEL_INFO, "Valid PIN Code: %s", pin_code);
-			} else {
-				indigo_logger(LOG_LEVEL_INFO, "Invalid PIN Code: %s", pin_code);
-				message = TLV_VALUE_AP_WSC_PIN_CODE_NOT_OK;
-				goto done;
-			}
-		}
 		/*
-		 * End of wsc pin validation function
+		 * wsc pin validation function
 		 */
 		CHECK_SNPRINTF(buffer, sizeof(buffer), ret, "WPS_PIN any %s", pin_code);
 	} else {
