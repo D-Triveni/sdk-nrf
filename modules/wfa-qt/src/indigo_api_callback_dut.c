@@ -144,6 +144,21 @@ static int run_qt_command(const char *cmd)
 	char buffer[64] = { 0 }, response[16] = { 0 };
 	size_t resp_len = sizeof(response);
 	int ret = 0;
+	struct wpa_supplicant *wpa_s;
+	char if_name[CONFIG_NET_INTERFACE_NAME_LEN + 1];
+	struct net_if *iface = net_if_get_wifi_sta();
+
+	ret = net_if_get_name(iface, if_name, sizeof(if_name));
+	if (!ret) {
+		indigo_logger(LOG_LEVEL_ERROR, "Cannot get interface name (%d)", ret);
+		return -1;
+	}
+
+	wpa_s = zephyr_get_handle_by_ifname(if_name);
+	if (!wpa_s) {
+		indigo_logger(LOG_LEVEL_ERROR, "Unable to find the interface: %s, quitting", if_name);
+		return -1;
+	}
 
 	indigo_logger(LOG_LEVEL_ERROR, "Running cmd: %s", cmd);
 	snprintf(buffer, sizeof(buffer), "%s", cmd);
@@ -152,8 +167,8 @@ static int run_qt_command(const char *cmd)
 		goto done;
 	}
 
-	if (ctrl_conn) {
-		ret = wpa_ctrl_request(ctrl_conn, buffer, sizeof(buffer),
+	if (wpa_s->ctrl_conn) {
+		ret = wpa_ctrl_request(wpa_s->ctrl_conn, buffer, sizeof(buffer),
 					response, &resp_len, NULL);
 		if (ret) {
 			indigo_logger(LOG_LEVEL_ERROR,
