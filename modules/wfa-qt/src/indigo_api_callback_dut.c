@@ -77,8 +77,10 @@ void register_apis(void)
 #ifdef CONFIG_WNM
 	register_api(API_AP_SEND_BTM_REQ, NULL, send_ap_btm_handler);
 #endif /* End Of CONFIG_WNM */
+#ifdef CONFIG_WPS
 	register_api(API_AP_START_WPS, NULL, start_wps_ap_handler);
 	register_api(API_AP_CONFIGURE_WSC, NULL, configure_ap_wsc_handler);
+#endif /* End Of CONFIG_WPS */
 #endif /* End Of CONFIG_AP */
 	/* STA */
 	register_api(API_STA_ASSOCIATE, NULL, associate_sta_handler);
@@ -1006,6 +1008,7 @@ done:
 	return 0;
 }
 
+#ifdef CONFIG_WPS
 /* RESP: {<ResponseTLV.STATUS: 40961>: '0', */
 /*<ResponseTLV.MESSAGE: 40960>: 'Configure and start wsc ap successfully. (Configure and start)'}*/
 static int configure_ap_wsc_handler(struct packet_wrapper *req, struct packet_wrapper *resp)
@@ -1147,6 +1150,7 @@ done:
 
 	return 0;
 }
+#endif /* End Of CONFIG_WPS */
 
 #ifdef CONFIG_WNM
 static int send_ap_btm_handler(struct packet_wrapper *req, struct packet_wrapper *resp)
@@ -1644,7 +1648,7 @@ static int set_ap_parameter_handler(struct packet_wrapper *req, struct packet_wr
 	}
 	if (tlv && find_tlv_config_name(tlv->id) != NULL) {
 		if (strncpy(param_name, find_tlv_config_name(tlv->id),
-			    sizeof(param_value)) == NULL) {
+			    sizeof(param_name)) == NULL) {
 			goto done;
 		}
 		memcpy(param_value, tlv->value, sizeof(param_value));
