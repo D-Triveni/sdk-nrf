@@ -74,7 +74,7 @@ config RX_THREAD_STACK_SIZE
 
 config STATS_PRINT_TIMEOUT
 	int "Periodic statistics print timeout"
-	default 5
+	default 500
 	help
 	  This option sets the timeout for periodic statistics print in seconds.
 

@@ -422,19 +422,17 @@ static int process_rx_packet(struct packet_data *packet)
 	LOG_INF("Wi-Fi monitor mode RX thread started");
 	start_time = k_uptime_get_32();
 
-	do {
 		received = recv(packet->recv_sock, packet->recv_buffer,
 				sizeof(packet->recv_buffer), 0);
 		if (received <= 0) {
 			if (errno == EAGAIN) {
-				continue;
+				return;
 			}
 
 			if (received < 0) {
 				LOG_ERR("Monitor : recv error %s", strerror(errno));
 				ret = -errno;
 			}
-			break;
 		}
 
 		parse_and_update_stats(&packet->recv_buffer[RAW_PKT_HDR], &stats);
@@ -443,7 +441,6 @@ static int process_rx_packet(struct packet_data *packet)
 			print_stats();
 			start_time = k_uptime_get_32();
 		}
-	} while (true);
 
 	return ret;
 }
@@ -498,6 +495,7 @@ static void create_rx_thread(void)
 	while (!ret) {
 		ret = process_rx_packet(&sock_packet);
 		if (ret < 0) {
+			LOG_ERR("Process RX thread returned error");
 			return;
 		}
 	}
